@@ -1,0 +1,5 @@
+# .gitignore
+data/
+*.npz
+__pycache__/
+*.pyc
