@@ -3,3 +3,9 @@ data/
 *.npz
 __pycache__/
 *.pyc
+
+# 모델 체크포인트 (용량 큼) — results/*.csv, *.png 은 실험 결과라 커밋 대상
+*.pt
+
+# 실행 로그 (터미널 원문) — 수치는 results/*.csv 에 남으므로 커밋하지 않음
+results/*_log.txt
