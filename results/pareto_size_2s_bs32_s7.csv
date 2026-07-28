@@ -1,0 +1,2 @@
+name,patch_len,stride,d_model,n_heads,n_layers,d_ff,mflops,params,window_acc,window_std,subject_acc,subject_acc_soft,roc_auc,mean_epochs,overfit_gap
+d64L2,100,50,64,4,2,128,38.34,74190,0.7606,0.0874,0.8038,0.8038,0.8561,14.6,0.806
