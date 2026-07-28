@@ -143,10 +143,11 @@ def simulate_exit(probs, threshold):
     return chosen.argmax(axis=1), used, chosen[:, 1]
 
 
-def subject_vote(pred, subj, ytrue):
-    uniq = np.unique(subj)
-    return sum(int(round(pred[subj == s].mean()) == ytrue[subj == s][0])
-               for s in uniq) / len(uniq)
+# 피험자 집계는 evaluate.py의 구현을 그대로 쓴다(하드/소프트 동일 기준 보장).
+# 지연 import — evaluate가 이 모듈을 import하므로 최상단에 두면 순환 참조.
+def subject_vote_both(pred, probs, subj, ytrue):
+    from evaluate import subject_vote_both as _impl
+    return _impl(pred, probs, subj, ytrue)
 
 
 # ──────────────────────────── 학습 ────────────────────────────
@@ -268,11 +269,12 @@ def main():
 
     rows = []
     for t in thresholds:
-        wa, sa, au, fl, layer = [], [], [], [], []
+        wa, sa, ss, au, fl, layer = [], [], [], [], [], []
         for probs, yte, subj in cache:
             pred, used, p1 = simulate_exit(probs, t)
             wa.append((pred == yte).mean())
-            sa.append(subject_vote(pred, subj, yte))
+            h, s = subject_vote_both(pred, p1, subj, yte)   # p1 = 종료 출구의 P(환자)
+            sa.append(h); ss.append(s)
             au.append(roc_auc_score(yte, p1))
             fl.append(exit_flops[used].mean())        # 실제 사용 출구의 FLOPs 평균
             layer.append(used.mean() + 1)
@@ -283,10 +285,11 @@ def main():
             compute_pct=round(float(np.mean(fl)) / exit_flops[-1] * 100, 2),
             window_acc=round(float(np.mean(wa)), 4),
             subject_acc=round(float(np.mean(sa)), 4),
+            subject_acc_soft=round(float(np.mean(ss)), 4),
             roc_auc=round(float(np.mean(au)), 4)))
 
     cols = ["name", "threshold", "mflops", "compute_pct", "mean_exit",
-            "window_acc", "subject_acc", "roc_auc"]
+            "window_acc", "subject_acc", "subject_acc_soft", "roc_auc"]
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(",".join(cols) + "\n")
         for r in rows:
@@ -294,11 +297,12 @@ def main():
     print(f"\n수치 저장: {args.out}")
 
     print(f"\n{'임계값':>8}{'MFLOPs':>10}{'연산%':>8}{'평균출구':>9}"
-          f"{'윈도우acc':>11}{'피험자acc':>11}{'AUC':>8}")
+          f"{'윈도우acc':>11}{'hard':>8}{'soft':>8}{'AUC':>8}")
     for r in rows:
         print(f"{r['threshold']:>8.3f}{r['mflops']:>10.1f}{r['compute_pct']:>8.1f}"
               f"{r['mean_exit']:>9.2f}{r['window_acc']:>11.3f}"
-              f"{r['subject_acc']:>11.3f}{r['roc_auc']:>8.3f}")
+              f"{r['subject_acc']:>8.3f}{r['subject_acc_soft']:>8.3f}"
+              f"{r['roc_auc']:>8.3f}")
 
     png = args.out.replace(".csv", ".png")
     plot_pareto(rows, png)
