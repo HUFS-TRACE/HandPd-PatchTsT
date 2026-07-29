@@ -51,6 +51,35 @@ CONFIGS = [
     dict(name="mid",      patch_len=16, stride=8,  d_model=64,  n_heads=4, n_layers=2, d_ff=128),
     dict(name="baseline", patch_len=16, stride=8,  d_model=128, n_heads=8, n_layers=3, d_ff=256),
     dict(name="wide",     patch_len=16, stride=8,  d_model=192, n_heads=8, n_layers=3, d_ff=384),
+]
+
+# 패치 축 스윕 — 시퀀스 길이의 5%(작은 패치)부터 10%(큰 패치)까지.
+#   패치 수가 곧 어텐션 비용(제곱)이라, 큰 패치 설정은 baseline보다 10~20배 싸다.
+#   50% 겹침(stride = patch_len/2)으로 통일해 "패치 크기"만 변수로 남긴다.
+PATCH_CONFIGS = [
+    dict(name="p16",  patch_len=16,  stride=8,  d_model=64, n_heads=4, n_layers=2, d_ff=128),
+    dict(name="p32",  patch_len=32,  stride=16, d_model=64, n_heads=4, n_layers=2, d_ff=128),
+    dict(name="p50",  patch_len=50,  stride=25, d_model=64, n_heads=4, n_layers=2, d_ff=128),
+    dict(name="p100", patch_len=100, stride=50, d_model=64, n_heads=4, n_layers=2, d_ff=128),
+    dict(name="p200", patch_len=200, stride=100, d_model=64, n_heads=4, n_layers=2, d_ff=128),
+]
+
+# 어텐션 head 축 — d_model 64를 몇 갈래로 쪼갤지만 변화(파라미터 수는 동일).
+#   head가 많을수록 head당 차원이 좁아진다: 2→32차원, 4→16, 8→8.
+HEAD_CONFIGS = [
+    dict(name="h2", patch_len=100, stride=50, d_model=64, n_heads=2, n_layers=2, d_ff=128),
+    dict(name="h4", patch_len=100, stride=50, d_model=64, n_heads=4, n_layers=2, d_ff=128),
+    dict(name="h8", patch_len=100, stride=50, d_model=64, n_heads=8, n_layers=2, d_ff=128),
+]
+
+# 모델 크기 축 — 패치는 100/50으로 고정하고 폭·깊이만 변화.
+SIZE_CONFIGS = [
+    dict(name="d32L2",  patch_len=100, stride=50, d_model=32,  n_heads=4, n_layers=2, d_ff=64),
+    dict(name="d64L1",  patch_len=100, stride=50, d_model=64,  n_heads=4, n_layers=1, d_ff=128),
+    dict(name="d64L2",  patch_len=100, stride=50, d_model=64,  n_heads=4, n_layers=2, d_ff=128),
+    dict(name="d64L4",  patch_len=100, stride=50, d_model=64,  n_heads=4, n_layers=4, d_ff=128),
+    dict(name="d128L2", patch_len=100, stride=50, d_model=128, n_heads=8, n_layers=2, d_ff=256),
+    dict(name="d128L3", patch_len=100, stride=50, d_model=128, n_heads=8, n_layers=3, d_ff=256),
     # deep(16/8, d128, L6)은 기본 스윕에서 제외.
     #   earlyexit.py 기본 설정과 구조가 동일하고, EE를 thr=1.0으로 돌리면
     #   아무도 조기종료를 안 해 6층 전체를 통과 → 같은 지점이 공짜로 나온다.
@@ -79,11 +108,17 @@ def parse_args():
     p.add_argument("--class-weight-patient", type=float, default=1.0)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
 
+    p.add_argument("--verbose", "-v", action="store_true",
+                   help="epoch마다 train/val loss·acc 출력")
     p.add_argument("--dry-run",   action="store_true", help="학습 없이 FLOPs 표만 출력")
     p.add_argument("--plot-only", action="store_true", help="기존 CSV로 곡선만 다시 그리기")
     p.add_argument("--ckpt",      default=None, help="학습된 체크포인트 1개만 평가")
     p.add_argument("--configs",   default=None,
                    help="쉼표로 구분한 설정 이름 (기본: 전체). 예: tiny,baseline")
+    p.add_argument("--suite", default="default",
+                   choices=["default", "patch", "size", "head"],
+                   help="설정 묶음: default(원래 6종) / patch(패치 크기) / "
+                        "size(모델 크기) / head(어텐션 head 수)")
     return p.parse_args()
 
 
@@ -128,10 +163,12 @@ def count_params(model):
 # ────────────────────────── 학습·평가 ──────────────────────────
 
 def subject_vote(pred, subj, ytrue):
-    """윈도우 예측 → 피험자 단위 다수결 정확도.
+    """윈도우 예측(0/1) → 피험자 단위 hard voting 정확도.
 
     윈도우 수(수천)와 달리 실제 사람은 수십 명뿐이라, 사람 단위 집계가
     일반화 성능의 정직한 지표다.
+
+    hard voting: 각 윈도우가 한 표씩 행사. 확신도 0.51이든 0.99든 같은 1표.
     """
     correct = 0
     uniq = np.unique(subj)
@@ -141,11 +178,38 @@ def subject_vote(pred, subj, ytrue):
     return correct / len(uniq)
 
 
+def subject_vote_soft(probs, subj, ytrue, threshold=0.5):
+    """윈도우 확률 → 피험자 단위 soft voting 정확도.
+
+    soft voting: 각 윈도우의 P(환자)를 평균낸 뒤 임계값과 비교.
+    확신도가 표의 무게에 반영되므로, 애매한 윈도우(0.51)가 확실한
+    윈도우(0.99)를 상쇄하지 못한다.
+
+    hard와 갈리는 경우: 윈도우 10개 중 6개가 P=0.55(환자), 4개가 P=0.05(정상)
+      hard → 6:4로 환자 판정
+      soft → 평균 0.35로 정상 판정
+    어느 쪽이 옳은지는 데이터가 정한다(→ compare_voting).
+    """
+    correct = 0
+    uniq = np.unique(subj)
+    for s in uniq:
+        m = subj == s
+        correct += int((probs[m].mean() >= threshold) == bool(ytrue[m][0]))
+    return correct / len(uniq)
+
+
+def subject_vote_both(pred, probs, subj, ytrue):
+    """(hard, soft) 정확도를 한 번에. 두 방식의 비교용."""
+    return (subject_vote(pred, subj, ytrue),
+            subject_vote_soft(probs, subj, ytrue))
+
+
 def train_eval_config(cfg, X, y, subject_id, folds, args):
     """한 설정을 n-fold 학습·평가 → (윈도우acc, 피험자acc, AUC, FLOPs, 파라미터)."""
     device = torch.device(args.device)
     ckpt = os.path.join(RESULT_DIR, f"_tmp_{cfg['name']}.pt")
-    win_accs, subj_accs, aucs = [], [], []
+    win_accs, subj_accs, subj_accs_soft, aucs, gaps = [], [], [], [], []
+    curves = []                                    # fold별 학습 곡선 (loss 그래프용)
     flops = params = None
 
     for fold, (tr, va, te) in enumerate(folds):
@@ -166,31 +230,131 @@ def train_eval_config(cfg, X, y, subject_id, folds, args):
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="min", factor=0.5, patience=3)
 
-        best_val, no_improve = float("inf"), 0
+        best_val, no_improve, best_epoch = float("inf"), 0, 0
+        hist = []                                  # (epoch, train_loss, train_acc, val_loss, val_acc)
         for epoch in range(1, args.epochs + 1):
-            run_epoch(model, train_loader, criterion, device, optimizer)
-            val_loss, *_ = run_epoch(model, val_loader, criterion, device)
+            tr_loss, tr_acc, *_ = run_epoch(model, train_loader, criterion, device, optimizer)
+            val_loss, val_acc, *_ = run_epoch(model, val_loader, criterion, device)
             scheduler.step(val_loss)
+            hist.append((epoch, tr_loss, tr_acc, val_loss, val_acc))
+
             if val_loss < best_val:
-                best_val, no_improve = val_loss, 0
+                best_val, no_improve, best_epoch = val_loss, 0, epoch
                 torch.save(model.state_dict(), ckpt)
+                mark = " *"                        # 체크포인트 갱신
             else:
                 no_improve += 1
-                if no_improve >= args.patience:
-                    break
+                mark = ""
 
+            if args.verbose:
+                print(f"      ep {epoch:3d} | train {tr_loss:.4f} / {tr_acc:.3f}"
+                      f" | val {val_loss:.4f} / {val_acc:.3f}"
+                      f" | lr {optimizer.param_groups[0]['lr']:.2e}{mark}", flush=True)
+
+            if no_improve >= args.patience:
+                if args.verbose:
+                    print(f"      early stop @ ep {epoch} (best ep {best_epoch})", flush=True)
+                break
+
+        curves.append(hist)
         model.load_state_dict(torch.load(ckpt))
         _, acc, preds, labels, probs = run_epoch(model, test_loader, criterion, device)
         win_accs.append(acc)
-        subj_accs.append(subject_vote(preds, subject_id[te], labels))
+        sa_hard, sa_soft = subject_vote_both(preds, probs, subject_id[te], labels)
+        subj_accs.append(sa_hard)
+        subj_accs_soft.append(sa_soft)
         aucs.append(roc_auc_score(labels, probs))
+        # 과적합 진단: 마지막 epoch의 train/val loss 간극
+        gaps.append(hist[-1][3] - hist[-1][1])
         print(f"    fold {fold+1}/{len(folds)}  윈도우 {acc:.3f}  "
-              f"피험자 {subj_accs[-1]:.3f}  AUC {aucs[-1]:.3f}", flush=True)
+              f"피험자 hard {sa_hard:.3f} / soft {sa_soft:.3f}  "
+              f"AUC {aucs[-1]:.3f}  ep {len(hist)}(best {best_epoch})  "
+              f"gap {gaps[-1]:+.3f}", flush=True)
 
     if os.path.exists(ckpt):
         os.remove(ckpt)
-    return (float(np.mean(win_accs)), float(np.std(win_accs)),
-            float(np.mean(subj_accs)), float(np.mean(aucs)), flops, params)
+    return dict(
+        window_acc=float(np.mean(win_accs)), window_std=float(np.std(win_accs)),
+        subject_acc=float(np.mean(subj_accs)),
+        subject_acc_soft=float(np.mean(subj_accs_soft)),
+        roc_auc=float(np.mean(aucs)),
+        mean_epochs=float(np.mean([len(h) for h in curves])),
+        overfit_gap=float(np.mean(gaps)),
+        mflops=flops, params=params, curves=curves)
+
+
+def plot_curves(curves_by_cfg, out_png):
+    """설정별 train/val loss 곡선. fold는 연하게, 평균은 진하게.
+
+    val loss가 오르는데 train loss만 내려가면 과적합 — 그 지점이 epoch 상한의
+    근거가 된다. 그래서 fold별 원본을 남긴다(평균만 보면 조기중단 시점이 흐려짐).
+    """
+    n = len(curves_by_cfg)
+    ncol = min(3, n)
+    nrow = (n + ncol - 1) // ncol
+    fig, axes = plt.subplots(nrow, ncol, figsize=(5.2 * ncol, 3.8 * nrow), squeeze=False)
+
+    for ax, (name, curves) in zip(axes.flat, curves_by_cfg.items()):
+        for h in curves:                            # fold별 (연하게)
+            ep = [r[0] for r in h]
+            ax.plot(ep, [r[1] for r in h], color="#1e5aa8", alpha=0.25, lw=1)
+            ax.plot(ep, [r[3] for r in h], color="#c0392b", alpha=0.25, lw=1)
+
+        # 평균 (fold마다 조기중단 시점이 달라 짧은 쪽에 맞춤)
+        L = min(len(h) for h in curves)
+        ep = list(range(1, L + 1))
+        tr = [np.mean([h[i][1] for h in curves]) for i in range(L)]
+        va = [np.mean([h[i][3] for h in curves]) for i in range(L)]
+        ax.plot(ep, tr, color="#1e5aa8", lw=2.4, label="train loss")
+        ax.plot(ep, va, color="#c0392b", lw=2.4, label="val loss")
+
+        best = int(np.argmin(va)) + 1
+        ax.axvline(best, ls="--", color="#666", lw=1.2, alpha=0.8)
+        ax.annotate(f"val 최저 ep{best}", (best, max(va)), fontsize=8, color="#444",
+                    textcoords="offset points", xytext=(4, -4))
+
+        ax.set_title(f"{name}  (fold {len(curves)}개)", fontsize=11)
+        ax.set_xlabel("epoch"); ax.set_ylabel("loss")
+        ax.grid(alpha=0.3); ax.legend(fontsize=8)
+
+    for ax in axes.flat[n:]:
+        ax.axis("off")
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=140, facecolor="white")
+    print(f"학습 곡선 저장: {out_png}")
+
+
+def plot_voting(rows, out_png):
+    """hard vs soft voting 비교 — 설정별 막대 + 차이."""
+    names = [r["name"] for r in rows]
+    hard = np.array([r["subject_acc"] for r in rows]) * 100
+    soft = np.array([r["subject_acc_soft"] for r in rows]) * 100
+    x = np.arange(len(names))
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 4.6),
+                                   gridspec_kw={"width_ratios": [2, 1]})
+    ax1.bar(x - 0.2, hard, 0.4, label="hard voting", color="#1e5aa8")
+    ax1.bar(x + 0.2, soft, 0.4, label="soft voting", color="#c0392b")
+    for i, (h, s) in enumerate(zip(hard, soft)):
+        ax1.text(i - 0.2, h + 0.3, f"{h:.1f}", ha="center", fontsize=8)
+        ax1.text(i + 0.2, s + 0.3, f"{s:.1f}", ha="center", fontsize=8)
+    ax1.set_xticks(x); ax1.set_xticklabels(names, rotation=20, ha="right")
+    ax1.set_ylabel("피험자 정확도 (%)")
+    ax1.set_ylim(min(hard.min(), soft.min()) - 4, max(hard.max(), soft.max()) + 3)
+    ax1.set_title("hard vs soft voting"); ax1.legend(); ax1.grid(alpha=0.3, axis="y")
+
+    diff = soft - hard
+    colors = ["#1a7a3a" if d > 0 else "#c0392b" if d < 0 else "#999" for d in diff]
+    ax2.barh(x, diff, color=colors)
+    ax2.axvline(0, color="#333", lw=1)
+    ax2.set_yticks(x); ax2.set_yticklabels(names, fontsize=9)
+    ax2.set_xlabel("soft − hard (%p)")
+    ax2.set_title("차이 (양수 = soft 우세)"); ax2.grid(alpha=0.3, axis="x")
+
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=140, facecolor="white")
+    print(f"voting 비교 저장: {out_png}")
+    return diff
 
 
 # ─────────────────────────── Pareto ───────────────────────────
@@ -237,7 +401,8 @@ def plot_pareto(rows, out_png, acc_key="subject_acc", acc_label="피험자 정�
 
 def save_csv(rows, path):
     cols = ["name", "patch_len", "stride", "d_model", "n_heads", "n_layers", "d_ff",
-            "mflops", "params", "window_acc", "window_std", "subject_acc", "roc_auc"]
+            "mflops", "params", "window_acc", "window_std",
+            "subject_acc", "subject_acc_soft", "roc_auc", "mean_epochs", "overfit_gap"]
     with open(path, "w", encoding="utf-8") as f:
         f.write(",".join(cols) + "\n")
         for r in rows:
@@ -270,8 +435,19 @@ def load_csv(path):
 def main():
     args = parse_args()
     os.makedirs(RESULT_DIR, exist_ok=True)
-    csv_path = os.path.join(RESULT_DIR, "pareto.csv")
-    png_path = os.path.join(RESULT_DIR, "pareto.png")
+    # 스윕·데이터별로 파일을 나눠 이전 결과를 덮어쓰지 않는다
+    tag = args.suite if args.suite != "default" else ""
+    ds = os.path.basename(args.data_path).replace("windows", "").replace(".npz", "")
+    seed_tag = "" if args.seed == 42 else f"s{args.seed}"
+    lr_tag = "" if args.lr == 1e-3 else f"lr{args.lr:g}"
+    bs_tag = "" if args.batch_size == 64 else f"bs{args.batch_size}"
+    fd_tag = "" if args.n_folds == 5 else f"fold{args.n_folds}"
+    pt_tag = "" if args.patience == 10 else f"pat{args.patience}"
+    sfx = "_".join(s for s in (tag, ds.strip("_"), lr_tag, bs_tag,
+                               fd_tag, pt_tag, seed_tag) if s)
+    sfx = f"_{sfx}" if sfx else ""
+    csv_path = os.path.join(RESULT_DIR, f"pareto{sfx}.csv")
+    png_path = os.path.join(RESULT_DIR, f"pareto{sfx}.png")
 
     if args.plot_only:
         plot_pareto(load_csv(csv_path), png_path)
@@ -284,10 +460,13 @@ def main():
           f"정상 {(y==0).sum()} / 환자 {(y==1).sum()}  "
           f"피험자 {len(set(subject_id))}명\n")
 
-    configs = CONFIGS
+    configs = {"default": CONFIGS, "patch": PATCH_CONFIGS,
+               "size": SIZE_CONFIGS, "head": HEAD_CONFIGS}[args.suite]
     if args.configs:
         want = [s.strip() for s in args.configs.split(",")]
-        configs = [c for c in CONFIGS if c["name"] in want]
+        configs = [c for c in configs if c["name"] in want]
+    # 시퀀스보다 긴 패치는 만들 수 없다 (1초 데이터에서 patch200 등)
+    configs = [c for c in configs if (seq_len - c["patch_len"]) // c["stride"] + 1 >= 2]
 
     # ── 체크포인트 1개만 평가 ──
     if args.ckpt:
@@ -319,26 +498,44 @@ def main():
     print(f"\n{len(configs)}개 설정 × {args.n_folds}-fold 학습 시작 "
           f"(device={args.device}). 오래 걸립니다.\n")
 
-    rows = []
+    rows, curves_by_cfg = [], {}
     for i, cfg in enumerate(configs, 1):
         print(f"[{i}/{len(configs)}] {cfg['name']}  "
               f"({flop_map[cfg['name']][0]/1e6:.1f} MFLOPs)", flush=True)
-        wacc, wstd, sacc, auc, fl, pa = train_eval_config(
-            cfg, X, y, subject_id, folds, args)
-        rows.append({**cfg, "mflops": round(fl / 1e6, 2), "params": pa,
-                     "window_acc": round(wacc, 4), "window_std": round(wstd, 4),
-                     "subject_acc": round(sacc, 4), "roc_auc": round(auc, 4)})
-        print(f"    → 윈도우 {wacc:.3f}±{wstd:.3f}  피험자 {sacc:.3f}  AUC {auc:.3f}\n")
+        res = train_eval_config(cfg, X, y, subject_id, folds, args)
+        curves_by_cfg[cfg["name"]] = res.pop("curves")
+        res["mflops"] = round(res["mflops"] / 1e6, 2)
+        rows.append({**cfg, **{k: (round(v, 4) if isinstance(v, float) else v)
+                               for k, v in res.items()}})
+        print(f"    → 윈도우 {res['window_acc']:.3f}±{res['window_std']:.3f}  "
+              f"피험자 hard {res['subject_acc']:.3f} / soft {res['subject_acc_soft']:.3f}  "
+              f"AUC {res['roc_auc']:.3f}  평균 {res['mean_epochs']:.1f}ep  "
+              f"과적합gap {res['overfit_gap']:+.3f}\n")
         save_csv(rows, csv_path)        # 중간에 끊겨도 남도록 매번 저장
 
-    # ── 결과 요약 + 곡선 ──
+    # ── 결과 요약 ──
     mask = pareto_mask([r["mflops"] for r in rows], [r["subject_acc"] for r in rows])
-    print(f"\n{'설정':<10}{'MFLOPs':>10}{'윈도우acc':>11}{'피험자acc':>11}{'AUC':>8}  Pareto")
+    print(f"\n{'설정':<10}{'MFLOPs':>10}{'윈도우':>9}{'hard':>8}{'soft':>8}"
+          f"{'AUC':>8}{'ep':>6}{'gap':>8}  Pareto")
     for r, m in zip(rows, mask):
-        print(f"{r['name']:<10}{r['mflops']:>10.1f}{r['window_acc']:>11.3f}"
-              f"{r['subject_acc']:>11.3f}{r['roc_auc']:>8.3f}  {'★' if m else ''}")
+        print(f"{r['name']:<10}{r['mflops']:>10.1f}{r['window_acc']:>9.3f}"
+              f"{r['subject_acc']:>8.3f}{r['subject_acc_soft']:>8.3f}"
+              f"{r['roc_auc']:>8.3f}{r['mean_epochs']:>6.1f}"
+              f"{r['overfit_gap']:>+8.3f}  {'★' if m else ''}")
 
     plot_pareto(rows, png_path)
+    plot_curves(curves_by_cfg, os.path.join(RESULT_DIR, f"loss_curves{sfx}.png"))
+    diff = plot_voting(rows, os.path.join(RESULT_DIR, f"voting{sfx}.png"))
+
+    # ── voting 결론 ──
+    win_soft = int((diff > 0).sum()); win_hard = int((diff < 0).sum())
+    print(f"\n[voting] soft 우세 {win_soft}개 / hard 우세 {win_hard}개 / "
+          f"동률 {len(diff)-win_soft-win_hard}개  |  평균 차이 {diff.mean():+.2f}%p")
+    n_subj_per_fold = len(set(subject_id)) / args.n_folds
+    print(f"         피험자 {len(set(subject_id))}명 기준 1명 ≈ "
+          f"{100/len(set(subject_id))*args.n_folds/args.n_folds:.1f}%p "
+          f"(fold당 test {n_subj_per_fold:.0f}명) → "
+          f"{abs(diff).max():.1f}%p 이하 차이는 노이즈로 봐야 함")
 
     best = max((r for r, m in zip(rows, mask) if m), key=lambda r: r["subject_acc"])
     cheap = min((r for r, m in zip(rows, mask) if m), key=lambda r: r["mflops"])

@@ -1,0 +1,142 @@
+﻿python : W0728 02:46:35.833000 35164 torch\utils\flop_counter.py:29] triton not found; flop counting 
+will not work for triton kernels
+At line:1 char:362
++ ... -PatchTsT"; python evaluate.py --suite patch --configs p32,p50,p100,p ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (W0728 02:46:35.... triton kernels:String) [], RemoteExc 
+   eption
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+데이터 data/windows_2s.npz  X(13474, 6, 2000)  정상 4867 / 환자 8607  피험자 61명
+
+설정            패치/stride  d_model   층    MFLOPs       파라미터
+p32            32/16          64   2     147.8     69,838
+p50            50/25          64   2      84.3     70,990
+p100          100/50          64   2      38.3     74,190
+p200          200/100         64   2      19.0     80,590
+
+4개 설정 × 5-fold 학습 시작 (device=cuda). 오래 걸립니다.
+
+[1/4] p32  (147.8 MFLOPs)
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 1/5  윈도우 0.730  피험자 hard 0.750 / soft 0.750  AUC 0.820  ep 12(best 2)  gap +0.098
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 2/5  윈도우 0.774  피험자 hard 0.750 / soft 0.750  AUC 0.867  ep 18(best 8)  gap +0.425
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 3/5  윈도우 0.695  피험자 hard 0.846 / soft 0.846  AUC 0.796  ep 23(best 13)  gap +0.174
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 4/5  윈도우 0.831  피험자 hard 0.833 / soft 0.833  AUC 0.897  ep 13(best 3)  gap +0.171
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 5/5  윈도우 0.863  피험자 hard 0.917 / soft 0.917  AUC 0.951  ep 13(best 3)  gap +0.309
+    → 윈도우 0.779±0.062  피험자 hard 0.819 / soft 0.819  AUC 0.866  평균 15.8ep  과적합gap +0.235
+
+수치 저장: results\pareto_patch_2s.csv
+[2/4] p50  (84.3 MFLOPs)
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 1/5  윈도우 0.778  피험자 hard 0.833 / soft 0.917  AUC 0.862  ep 20(best 10)  gap +0.070
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 2/5  윈도우 0.773  피험자 hard 0.833 / soft 0.833  AUC 0.841  ep 12(best 2)  gap +0.183
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 3/5  윈도우 0.707  피험자 hard 1.000 / soft 1.000  AUC 0.812  ep 26(best 16)  gap +0.365
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 4/5  윈도우 0.849  피험자 hard 0.917 / soft 0.917  AUC 0.914  ep 15(best 5)  gap +0.138
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 5/5  윈도우 0.869  피험자 hard 1.000 / soft 1.000  AUC 0.936  ep 11(best 1)  gap +0.111
+    → 윈도우 0.795±0.058  피험자 hard 0.917 / soft 0.933  AUC 0.873  평균 16.8ep  과적합gap +0.173
+
+수치 저장: results\pareto_patch_2s.csv
+[3/4] p100  (38.3 MFLOPs)
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 1/5  윈도우 0.732  피험자 hard 0.750 / soft 0.667  AUC 0.797  ep 11(best 1)  gap -0.078
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 2/5  윈도우 0.724  피험자 hard 0.750 / soft 0.750  AUC 0.786  ep 11(best 1)  gap +0.202
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 3/5  윈도우 0.588  피험자 hard 0.692 / soft 0.692  AUC 0.784  ep 14(best 4)  gap +0.331
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 4/5  윈도우 0.857  피험자 hard 0.917 / soft 0.917  AUC 0.925  ep 18(best 8)  gap +0.152
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 5/5  윈도우 0.805  피험자 hard 0.917 / soft 1.000  AUC 0.876  ep 13(best 3)  gap +0.444
+    → 윈도우 0.741±0.091  피험자 hard 0.805 / soft 0.805  AUC 0.834  평균 13.4ep  과적합gap +0.210
+
+수치 저장: results\pareto_patch_2s.csv
+[4/4] p200  (19.0 MFLOPs)
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 1/5  윈도우 0.757  피험자 hard 0.917 / soft 0.917  AUC 0.837  ep 12(best 2)  gap +0.057
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 2/5  윈도우 0.776  피험자 hard 0.750 / soft 0.750  AUC 0.844  ep 12(best 2)  gap +0.363
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 3/5  윈도우 0.698  피험자 hard 0.846 / soft 0.846  AUC 0.803  ep 12(best 2)  gap +0.426
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 4/5  윈도우 0.848  피험자 hard 0.917 / soft 0.917  AUC 0.907  ep 13(best 3)  gap +0.131
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor
+ is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 5/5  윈도우 0.808  피험자 hard 0.917 / soft 0.917  AUC 0.940  ep 13(best 3)  gap +0.749
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\evaluate.py:344: UserWarning: Glyph 8722 (\N{MI
+NUS SIGN}) missing from font(s) Malgun Gothic.
+  fig.tight_layout()
+C:\Users\JongyoonWon\Documents\GitHub\HandPd-PatchTsT\evaluate.py:345: UserWarning: Glyph 8722 (\N{MI
+NUS SIGN}) missing from font(s) Malgun Gothic.
+  fig.savefig(out_png, dpi=140, facecolor="white")
+    → 윈도우 0.778±0.050  피험자 hard 0.869 / soft 0.869  AUC 0.866  평균 12.4ep  과적합gap +0.345
+
+수치 저장: results\pareto_patch_2s.csv
+
+설정            MFLOPs      윈도우    hard    soft     AUC    ep     gap  Pareto
+p32            147.8    0.779   0.819   0.819   0.866  15.8  +0.235  
+p50             84.3    0.795   0.917   0.933   0.873  16.8  +0.173  ★
+p100            38.3    0.741   0.805   0.805   0.834  13.4  +0.210  
+p200            19.0    0.777   0.869   0.869   0.866  12.4  +0.345  ★
+곡선 저장: results\pareto_patch_2s.png
+학습 곡선 저장: results\loss_curves_patch_2s.png
+voting 비교 저장: results\voting_patch_2s.png
+
+[voting] soft 우세 1개 / hard 우세 0개 / 동률 3개  |  평균 차이 +0.41%p
+         피험자 61명 기준 1명 ≈ 1.6%p (fold당 test 12명) → 1.7%p 이하 차이는 노이즈로 봐야 함
+
+정확도 최고(Pareto): p50  91.7% @ 84.3 MFLOPs
+최소 연산(Pareto):   p200  86.9% @ 19.0 MFLOPs
