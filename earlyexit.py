@@ -125,10 +125,13 @@ def exit_probs(model, loader, device):
 
 
 def simulate_exit(probs, threshold):
-    """확신도 >= threshold인 첫 출구에서 나갔다고 가정.
+    """확신도(max softmax) >= threshold인 첫 출구에서 나갔다고 가정.
 
     모든 출구를 미리 계산해두고 재계산만 하므로, 임계값을 아무리 촘촘히
     스윕해도 학습·추론 비용이 늘지 않는다 (표준 offline 평가 방식).
+
+    한계: softmax는 과신하는 경향이 있어, 틀린 예측에도 0.99가 나오면
+    임계값이 걸러내지 못한다 → 대안이 simulate_exit_pabee.
 
     반환: (예측, 사용한 출구 인덱스 0-based, 환자 확률)
     """
@@ -143,6 +146,36 @@ def simulate_exit(probs, threshold):
     return chosen.argmax(axis=1), used, chosen[:, 1]
 
 
+def simulate_exit_pabee(probs, patience):
+    """PABEE 방식 — 연속 patience개 출구가 같은 답을 내면 종료.
+
+    확신도 대신 "예측이 안정됐는가"를 본다. 층을 더 쌓아도 답이 안 바뀌면
+    더 볼 이유가 없다는 논리라, softmax 과신 문제를 우회한다.
+    (Zhou et al., "BERT Loses Patience", NeurIPS 2020)
+
+    patience=1이면 2개 층이 연속 일치할 때 종료, 2면 3개 연속.
+    확신도를 쓰지 않으므로 calibration이 나빠도 영향을 받지 않는다.
+
+    반환: (예측, 사용한 출구 인덱스 0-based, 환자 확률)
+    """
+    n_exit, n = probs.shape[:2]
+    pred_per_exit = probs.argmax(axis=2)           # [n_exit, N]
+    used = np.full(n, n_exit - 1, dtype=int)
+    cnt = np.zeros(n, dtype=int)                   # 연속 일치 횟수
+    done = np.zeros(n, dtype=bool)
+
+    for e in range(1, n_exit):
+        same = pred_per_exit[e] == pred_per_exit[e - 1]
+        cnt = np.where(same, cnt + 1, 0)           # 달라지면 초기화
+        hit = (cnt >= patience) & ~done
+        used[hit] = e
+        done |= hit
+
+    idx = np.arange(n)
+    chosen = probs[used, idx]
+    return chosen.argmax(axis=1), used, chosen[:, 1]
+
+
 # 피험자 집계는 evaluate.py의 구현을 그대로 쓴다(하드/소프트 동일 기준 보장).
 # 지연 import — evaluate가 이 모듈을 import하므로 최상단에 두면 순환 참조.
 def subject_vote_both(pred, probs, subj, ytrue):
@@ -152,6 +185,23 @@ def subject_vote_both(pred, probs, subj, ytrue):
 
 # ──────────────────────────── 학습 ────────────────────────────
 
+def exit_weights(scheme, n_layers):
+    """출구별 손실 가중치. 합이 n_layers가 되도록 정규화해 손실 스케일을 맞춘다.
+
+    스케일을 맞추지 않으면 가중 방식마다 손실 크기가 달라져 learning rate를
+    다시 잡아야 하고, 그러면 "가중치 효과"와 "lr 효과"가 섞인다.
+
+    uniform : 모두 1.0          — 얕은 층도 동등한 압력을 받아 단독 판정력이 강해진다
+    deep    : (i+1)에 비례       — 최종 정확도 우선, 얕은 층은 보조 (문헌에서 흔한 방식)
+    shallow : (n-i)에 비례       — 얕은 출구를 강화해 조기종료를 더 싸게 만드는 방향
+    """
+    i = np.arange(n_layers, dtype=float)
+    w = {"uniform": np.ones(n_layers),
+         "deep": i + 1,
+         "shallow": n_layers - i}[scheme]
+    return w / w.sum() * n_layers
+
+
 def train_fold(model, train_loader, val_loader, criterion, args, ckpt):
     device = torch.device(args.device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,
@@ -159,14 +209,17 @@ def train_fold(model, train_loader, val_loader, criterion, args, ckpt):
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=3)
 
+    w = torch.tensor(exit_weights(args.loss_weight, args.n_layers),
+                     dtype=torch.float32, device=device)
+
     best_val, no_improve = float("inf"), 0
     for epoch in range(1, args.epochs + 1):
         model.train()
         for X, y in train_loader:
             X, y = X.to(device), y.to(device)
             optimizer.zero_grad()
-            # 공동 손실: 모든 출구의 손실을 동일 가중으로 합산
-            loss = sum(criterion(o, y) for o in model(X))
+            # 공동 손실: 출구별 손실을 가중 합산 (--loss-weight로 방식 선택)
+            loss = sum(w[i] * criterion(o, y) for i, o in enumerate(model(X)))
             loss.backward()
             optimizer.step()
 
@@ -175,7 +228,8 @@ def train_fold(model, train_loader, val_loader, criterion, args, ckpt):
         with torch.no_grad():
             for X, y in val_loader:
                 X, y = X.to(device), y.to(device)
-                val_loss += sum(criterion(o, y) for o in model(X)).item() * X.size(0)
+                val_loss += sum(w[i] * criterion(o, y)
+                                for i, o in enumerate(model(X))).item() * X.size(0)
         val_loss /= len(val_loader.dataset)
         scheduler.step(val_loss)
 
@@ -210,9 +264,21 @@ def parse_args():
     p.add_argument("--head-dropout", type=float, default=0.2)
     p.add_argument("--class-weight-healthy", type=float, default=2.0)
     p.add_argument("--class-weight-patient", type=float, default=1.0)
-    p.add_argument("--out",  default="results/earlyexit.csv")
+    p.add_argument("--loss-weight", default="uniform",
+                   choices=["uniform", "deep", "shallow"],
+                   help="출구 손실 가중: uniform(동일) / deep(깊은층↑) / shallow(얕은층↑)")
+    p.add_argument("--out",  default=None,
+                   help="기본값은 설정에 따라 자동 생성 (results/earlyexit_*.csv)")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    return p.parse_args()
+    a = p.parse_args()
+    if a.out is None:                       # 설정별로 파일이 갈리게 (덮어쓰기 방지)
+        tags = [f"L{a.n_layers}"]
+        if a.loss_weight != "uniform":
+            tags.append(a.loss_weight)
+        if a.seed != 42:
+            tags.append(f"s{a.seed}")
+        a.out = f"results/earlyexit_{'_'.join(tags)}.csv"
+    return a
 
 
 def main():
@@ -266,6 +332,74 @@ def main():
         cache.append((exit_probs(model, loader, device), y[te], subject_id[te]))
     if os.path.exists(ckpt):
         os.remove(ckpt)                                # 임시 체크포인트 정리
+
+    # ── 출구별 단독 성능 ──
+    # "깊을수록 나빠지는가"를 조기종료와 분리해 본다. 각 출구를 조합 없이
+    # 단독 분류기로 썼을 때의 정확도이므로, 여기서 깊은 출구가 이미 나쁘면
+    # 원인은 조기종료 조합이 아니라 출구 자체(과적합)다.
+    n_exit = cache[0][0].shape[0]
+    solo = []
+    for e in range(n_exit):
+        wa, sa, au = [], [], []
+        for probs, yte, subj in cache:
+            pred = probs[e].argmax(axis=1)
+            wa.append((pred == yte).mean())
+            sa.append(subject_vote_both(pred, probs[e][:, 1], subj, yte)[0])
+            au.append(roc_auc_score(yte, probs[e][:, 1]))
+        solo.append(dict(exit=e + 1, mflops=round(exit_flops[e] / 1e6, 2),
+                         window_acc=round(float(np.mean(wa)), 4),
+                         subject_acc=round(float(np.mean(sa)), 4),
+                         roc_auc=round(float(np.mean(au)), 4)))
+
+    print(f"\n### 출구별 단독 성능 (조기종료 없이 그 출구만 사용)")
+    print(f"{'출구':>5}{'MFLOPs':>10}{'윈도우acc':>11}{'피험자acc':>11}{'AUC':>8}")
+    for r in solo:
+        print(f"{r['exit']:>5}{r['mflops']:>10.1f}{r['window_acc']:>11.3f}"
+              f"{r['subject_acc']:>11.3f}{r['roc_auc']:>8.3f}")
+    best_solo = max(solo, key=lambda r: r["subject_acc"])
+    print(f"  → 단독 최고: 출구 {best_solo['exit']} "
+          f"({best_solo['subject_acc']*100:.1f}%)  |  "
+          f"마지막 출구 {solo[-1]['subject_acc']*100:.1f}%  "
+          f"차이 {(best_solo['subject_acc']-solo[-1]['subject_acc'])*100:+.1f}%p")
+
+    with open(args.out.replace(".csv", "_solo.csv"), "w", encoding="utf-8") as f:
+        cols = ["exit", "mflops", "window_acc", "subject_acc", "roc_auc"]
+        f.write(",".join(cols) + "\n")
+        for r in solo:
+            f.write(",".join(str(r[c]) for c in cols) + "\n")
+
+    # ── PABEE 종료 기준 (연속 k개 출구가 같은 답이면 종료) ──
+    print(f"\n### PABEE (연속 일치 기반) vs max softmax (확신도 기반)")
+    print(f"{'방식':>14}{'MFLOPs':>10}{'연산%':>8}{'평균출구':>9}"
+          f"{'윈도우acc':>11}{'hard':>8}{'AUC':>8}")
+    pabee_rows = []
+    for pat in range(1, n_exit):
+        wa, sa, au, fl, layer = [], [], [], [], []
+        for probs, yte, subj in cache:
+            pred, used, p1 = simulate_exit_pabee(probs, pat)
+            wa.append((pred == yte).mean())
+            sa.append(subject_vote_both(pred, p1, subj, yte)[0])
+            au.append(roc_auc_score(yte, p1))
+            fl.append(exit_flops[used].mean())
+            layer.append(used.mean() + 1)
+        r = dict(name=f"pabee_p{pat}", patience=pat,
+                 mflops=round(float(np.mean(fl)) / 1e6, 2),
+                 compute_pct=round(float(np.mean(fl)) / exit_flops[-1] * 100, 2),
+                 mean_exit=round(float(np.mean(layer)), 3),
+                 window_acc=round(float(np.mean(wa)), 4),
+                 subject_acc=round(float(np.mean(sa)), 4),
+                 roc_auc=round(float(np.mean(au)), 4))
+        pabee_rows.append(r)
+        print(f"{'PABEE k='+str(pat):>14}{r['mflops']:>10.1f}{r['compute_pct']:>8.1f}"
+              f"{r['mean_exit']:>9.2f}{r['window_acc']:>11.3f}"
+              f"{r['subject_acc']:>8.3f}{r['roc_auc']:>8.3f}")
+
+    with open(args.out.replace(".csv", "_pabee.csv"), "w", encoding="utf-8") as f:
+        cols = ["name", "patience", "mflops", "compute_pct", "mean_exit",
+                "window_acc", "subject_acc", "roc_auc"]
+        f.write(",".join(cols) + "\n")
+        for r in pabee_rows:
+            f.write(",".join(str(r[c]) for c in cols) + "\n")
 
     rows = []
     for t in thresholds:
