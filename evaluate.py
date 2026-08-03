@@ -64,6 +64,20 @@ PATCH_CONFIGS = [
     dict(name="p200", patch_len=200, stride=100, d_model=64, n_heads=4, n_layers=2, d_ff=128),
 ]
 
+# E1: 통제된 정적 깊이 대조군.
+#   Early Exit 모델과 완전히 같은 백본 설정(patch 16/8, d128, head 8, d_ff 256)에서
+#   층 수만 바꿔 독립 학습한다. 목적은 "깊은 출구가 나쁜 이유가 깊이 자체인가,
+#   아니면 공동 학습에서 얕은 출구 손실이 백본을 방해했기 때문인가"를 가르는 것.
+#     정적 L6 > 정적 L1  → 공동 학습이 원인 (EE 결론 약화)
+#     정적 L6 ≈ 정적 L1  → 깊이 자체가 원인 (EE 결론 강화)
+#   SIZE_CONFIGS의 d128L2/L3는 patch 100/50이라 EE와 직접 비교할 수 없어 이름을 분리했다.
+DEPTH_CONFIGS = [
+    dict(name="p16d128L1", patch_len=16, stride=8, d_model=128, n_heads=8, n_layers=1, d_ff=256),
+    dict(name="p16d128L2", patch_len=16, stride=8, d_model=128, n_heads=8, n_layers=2, d_ff=256),
+    dict(name="p16d128L3", patch_len=16, stride=8, d_model=128, n_heads=8, n_layers=3, d_ff=256),
+    dict(name="p16d128L6", patch_len=16, stride=8, d_model=128, n_heads=8, n_layers=6, d_ff=256),
+]
+
 # 어텐션 head 축 — d_model 64를 몇 갈래로 쪼갤지만 변화(파라미터 수는 동일).
 #   head가 많을수록 head당 차원이 좁아진다: 2→32차원, 4→16, 8→8.
 HEAD_CONFIGS = [
@@ -106,6 +120,15 @@ def parse_args():
     p.add_argument("--head-dropout", type=float, default=0.2)
     p.add_argument("--class-weight-healthy", type=float, default=2.0)
     p.add_argument("--class-weight-patient", type=float, default=1.0)
+    # ── 평가 프로토콜·정규화 실험용 (기본값은 기존 동작 유지) ──
+    p.add_argument("--stratified", action="store_true",
+                   help="StratifiedGroupKFold 사용 (기본: GroupKFold, 층화 없음)")
+    p.add_argument("--val-size", type=float, default=0.1,
+                   help="train_val에서 val로 뗄 비율. 10-fold면 val이 5~6명까지 줄어든다")
+    p.add_argument("--auto-class-weight", action="store_true",
+                   help="클래스 가중치를 train fold의 역빈도로 계산 (기본: 상수 2.0/1.0)")
+    p.add_argument("--label-smoothing", type=float, default=0.0,
+                   help="CE 라벨 스무딩. softmax 과신을 줄여 확신도를 정확도에 맞춘다")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
 
     p.add_argument("--verbose", "-v", action="store_true",
@@ -116,9 +139,10 @@ def parse_args():
     p.add_argument("--configs",   default=None,
                    help="쉼표로 구분한 설정 이름 (기본: 전체). 예: tiny,baseline")
     p.add_argument("--suite", default="default",
-                   choices=["default", "patch", "size", "head"],
+                   choices=["default", "patch", "size", "head", "depth"],
                    help="설정 묶음: default(원래 6종) / patch(패치 크기) / "
-                        "size(모델 크기) / head(어텐션 head 수)")
+                        "size(모델 크기) / head(어텐션 head 수) / "
+                        "depth(E1 통제 깊이 대조군, EE와 동일 백본)")
     return p.parse_args()
 
 
@@ -207,7 +231,10 @@ def subject_vote_both(pred, probs, subj, ytrue):
 def train_eval_config(cfg, X, y, subject_id, folds, args):
     """한 설정을 n-fold 학습·평가 → (윈도우acc, 피험자acc, AUC, FLOPs, 파라미터)."""
     device = torch.device(args.device)
-    ckpt = os.path.join(RESULT_DIR, f"_tmp_{cfg['name']}.pt")
+    # PID를 넣어 프로세스마다 다른 파일을 쓰게 한다.
+    # 같은 설정을 여러 프로세스가 동시에 돌리면 체크포인트를 서로 덮어써
+    # 한쪽이 읽는 중에 다른 쪽이 지우면서 크래시한다(실제로 겪음).
+    ckpt = os.path.join(RESULT_DIR, f"_tmp_{cfg['name']}_{os.getpid()}.pt")
     win_accs, subj_accs, subj_accs_soft, aucs, gaps = [], [], [], [], []
     curves = []                                    # fold별 학습 곡선 (loss 그래프용)
     flops = params = None
@@ -222,9 +249,16 @@ def train_eval_config(cfg, X, y, subject_id, folds, args):
         if flops is None:                       # 설정당 1회만 측정 (fold와 무관)
             flops, params = measure_flops(model, X.shape[2], X.shape[1]), count_params(model)
 
-        criterion = nn.CrossEntropyLoss(weight=torch.tensor(
-            [args.class_weight_healthy, args.class_weight_patient],
-            dtype=torch.float32).to(device))
+        if args.auto_class_weight:
+            # 역빈도. 분모의 2(클래스 수) 덕에 가중치 평균이 1.0이 되어
+            # 손실 스케일이 유지되므로 learning rate를 다시 잡을 필요가 없다.
+            cnt = np.bincount(y[tr], minlength=2)
+            cw = cnt.sum() / (2.0 * np.maximum(cnt, 1))
+        else:
+            cw = [args.class_weight_healthy, args.class_weight_patient]
+        criterion = nn.CrossEntropyLoss(
+            weight=torch.tensor(cw, dtype=torch.float32).to(device),
+            label_smoothing=args.label_smoothing)
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,
                                       weight_decay=args.weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -443,8 +477,17 @@ def main():
     bs_tag = "" if args.batch_size == 64 else f"bs{args.batch_size}"
     fd_tag = "" if args.n_folds == 5 else f"fold{args.n_folds}"
     pt_tag = "" if args.patience == 10 else f"pat{args.patience}"
-    sfx = "_".join(s for s in (tag, ds.strip("_"), lr_tag, bs_tag,
-                               fd_tag, pt_tag, seed_tag) if s)
+    st_tag = "strat" if args.stratified else ""
+    vs_tag = "" if args.val_size == 0.1 else f"val{args.val_size:g}"
+    cw_tag = "autocw" if args.auto_class_weight else ""
+    ls_tag = "" if args.label_smoothing == 0 else f"ls{args.label_smoothing:g}"
+    # --configs로 설정을 골라 돌리면 CSV가 그 설정만 담은 채 덮어쓰기 때문에,
+    # 고른 설정 이름을 파일명에 넣어 서로 다른 실행이 충돌하지 않게 한다.
+    # (전체 suite를 돌릴 때는 붙이지 않아 기존 파일명이 유지된다.)
+    cfg_tag = args.configs.replace(",", "-") if args.configs else ""
+    sfx = "_".join(s for s in (tag, cfg_tag, ds.strip("_"), lr_tag, bs_tag,
+                               fd_tag, pt_tag, st_tag, vs_tag, cw_tag, ls_tag,
+                               seed_tag) if s)
     sfx = f"_{sfx}" if sfx else ""
     csv_path = os.path.join(RESULT_DIR, f"pareto{sfx}.csv")
     png_path = os.path.join(RESULT_DIR, f"pareto{sfx}.png")
@@ -460,8 +503,8 @@ def main():
           f"정상 {(y==0).sum()} / 환자 {(y==1).sum()}  "
           f"피험자 {len(set(subject_id))}명\n")
 
-    configs = {"default": CONFIGS, "patch": PATCH_CONFIGS,
-               "size": SIZE_CONFIGS, "head": HEAD_CONFIGS}[args.suite]
+    configs = {"default": CONFIGS, "patch": PATCH_CONFIGS, "size": SIZE_CONFIGS,
+               "head": HEAD_CONFIGS, "depth": DEPTH_CONFIGS}[args.suite]
     if args.configs:
         want = [s.strip() for s in args.configs.split(",")]
         configs = [c for c in configs if c["name"] in want]
@@ -494,7 +537,8 @@ def main():
         return
 
     # ── 설정별 학습·평가 ──
-    folds = subject_kfold(subject_id, y, n_splits=args.n_folds, seed=args.seed)
+    folds = subject_kfold(subject_id, y, n_splits=args.n_folds, seed=args.seed,
+                          val_size=args.val_size, stratified=args.stratified)
     print(f"\n{len(configs)}개 설정 × {args.n_folds}-fold 학습 시작 "
           f"(device={args.device}). 오래 걸립니다.\n")
 
