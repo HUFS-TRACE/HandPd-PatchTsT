@@ -316,7 +316,7 @@ def main():
         dtype=torch.float32).to(device))
     folds = subject_kfold(subject_id, y, n_splits=args.n_folds, seed=args.seed)
     thresholds = np.round(np.arange(0.50, 1.001, 0.025), 3)
-    ckpt = "results/_tmp_ee.pt"
+    ckpt = f"results/_tmp_ee_{os.getpid()}.pt"   # 동시 실행 시 충돌 방지
 
     # fold별 학습 1회 → 출구 확률 캐시 → 임계값은 재계산만
     cache = []
