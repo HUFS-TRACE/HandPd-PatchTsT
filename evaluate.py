@@ -91,7 +91,13 @@ SIZE_CONFIGS = [
     dict(name="d32L2",  patch_len=100, stride=50, d_model=32,  n_heads=4, n_layers=2, d_ff=64),
     dict(name="d64L1",  patch_len=100, stride=50, d_model=64,  n_heads=4, n_layers=1, d_ff=128),
     dict(name="d64L2",  patch_len=100, stride=50, d_model=64,  n_heads=4, n_layers=2, d_ff=128),
+    # L3·L6은 Early Exit 출구 3·6과 백본이 정확히 일치하는 정적 대조군이다.
+    #   EE 실험(earlyexit.py)이 patch 100/50 · d64 · head 4 · d_ff 128로 돌아갔으므로,
+    #   공동 학습의 손해를 재려면 같은 설정의 정적 모델과 비교해야 한다.
+    #   (DEPTH_CONFIGS의 p16d128 계열은 patch 16/8 · d128이라 EE와 백본이 다르다)
+    dict(name="d64L3",  patch_len=100, stride=50, d_model=64,  n_heads=4, n_layers=3, d_ff=128),
     dict(name="d64L4",  patch_len=100, stride=50, d_model=64,  n_heads=4, n_layers=4, d_ff=128),
+    dict(name="d64L6",  patch_len=100, stride=50, d_model=64,  n_heads=4, n_layers=6, d_ff=128),
     dict(name="d128L2", patch_len=100, stride=50, d_model=128, n_heads=8, n_layers=2, d_ff=256),
     dict(name="d128L3", patch_len=100, stride=50, d_model=128, n_heads=8, n_layers=3, d_ff=256),
     # deep(16/8, d128, L6)은 기본 스윕에서 제외.
