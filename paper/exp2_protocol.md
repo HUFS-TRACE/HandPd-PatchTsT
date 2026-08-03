@@ -1,95 +1,128 @@
 # 실험 2 실행 프로토콜 — 시간 축 적응적 종료
 
 > 이 문서는 "왜 하는가"가 아니라 **"무엇을 어떤 순서로 실행하는가"** 를 다룬다.
-> 배경과 근거는 `paper/status_and_plan.md`, 깊이 축 결과는 `paper/depth_ee_negative.md` 참조.
+> 깊이 축(실험 1) 결과와 근거는 `docs/depth_ee_findings.md` 참조.
+>
+> **개정 이력**
+> - rev2 — E1 완료 반영. 확률 공급원을 **EE 출구 1 → 정적 L1**으로 변경(§1). MFLOPs 정정. 코드 현황 재조사
+> - rev1 — 초판
 
 ---
 
 ## 0. 전체 그림
 
 ```
-[A] 확률 확보          earlyexit.py --save-probs (시드 3개)
+[A] 확률 확보          evaluate.py --save-probs (신규 구현) · 정적 L1 · 시드 3개
         ↓
-[B] 사전 점검 ★        analyze_drift.py        → A·B·C 유형 계수. 여기서 중단 판정
+[B] 사전 점검 ★        analyze_drift.py (신규)   → A·B·C 유형 계수. 여기서 중단 판정
         ↓
-[C] 캘리브레이션       calibrate.py            → fold별 온도 T, 사전확률 보정 c
+[C] 캘리브레이션       calibrate.py (신규)       → fold별 온도 T, 사전확률 c
         ↓
-[D] 본 실험            sequential_exit.py      → SPRT vs fixed vs random
+[D] 본 실험            stream.py + sequential_exit.py (신규) → SPRT vs fixed vs random
         ↓
 [E] 보고               3지표 표 + (시간, 정확도) 곡선 + 반증 판정
 ```
 
 **[B]에서 결과가 나쁘면 [C] 이후를 실행하지 않는다.** 깊이 축에서 9회 학습하고 나서야
 전제 붕괴를 알게 된 상황을 반복하지 않기 위한 게이트다.
+학습은 [A]에서 한 번뿐이고 [B]~[E]는 전부 numpy 재계산이라, 게이트를 앞에 둘 수 있다.
 
-### 현재 코드 상태
+### 현재 코드 상태 (재조사 완료)
 
-| 파일 | 상태 | 필요한 작업 |
+| 파일 | 상태 | 작업 |
 |---|---|---|
-| `stream.py` | **완성** | 없음 |
-| `sequential_exit.py` | 골격 완성 | 유보 옵션, 비대칭 경계 (§4) |
-| `earlyexit.py` | test 확률만 저장 | **val 확률 저장 추가** (§1) |
+| `evaluate.py` | 확률 저장 기능 **없음** | `--save-probs` 신규 추가 (§1) |
+| `stream.py` | **없음** | 신규 작성 (§4-1) |
+| `sequential_exit.py` | **없음** | 신규 작성 (§4-2) |
 | `analyze_drift.py` | 없음 | 신규 (§2) |
 | `calibrate.py` | 없음 | 신규 (§3) |
 
+> **주의** — 8월 1일 시점에 로컬에 `stream.py` / `sequential_exit.py`가 존재했으나
+> 커밋되지 않았고 현재 워킹트리에 없다. `git log --all --diff-filter=A`로 확인 결과
+> 어느 브랜치에도 들어간 적이 없다. **다른 PC에 사본이 있는지 먼저 확인**할 것.
+> 있으면 §4의 작업량이 크게 줄어든다.
+
 ---
 
-## 1. [A] 확률 확보 — `earlyexit.py` 수정
+## 1. [A] 확률 확보 — `evaluate.py`에 `--save-probs` 추가
 
-### 1-1. 왜 val 확률이 필요한가
+### 1-1. ⭐ 왜 EE가 아니라 정적 모델인가
+
+**rev1에서 바뀐 가장 중요한 부분이다.**
+
+E1(통제 깊이 대조군)이 완료되면서, 같은 층 수에서 **정적 학습이 EE 출구보다 일관되게
+높다**는 것이 확인됐다(`docs/depth_ee_findings.md` §2-3).
+
+| 1층 기준 | 정적 L1 | EE 출구 1 | 차이 | t |
+|---|---:|---:|---:|---:|
+| 윈도우 정확도 | **.7805** | .7546 | +2.6%p | **2.90** |
+| ROC-AUC | **.8664** | .8493 | +.017 | **6.53** |
+
+SPRT는 **윈도우 확률의 품질이 곧 성능**이다. 증거 하나가 더 정확하면 경계에 더 빨리
+도달하고, 그것이 그대로 관측 시간 절감으로 나타난다. 더 나은 확률을 쓸 수 있는데
+나쁜 것을 쓸 이유가 없다.
+
+**부수 효과** — 실험 2가 `earlyexit.py`에서 완전히 독립한다.
+"깊이 축을 접었다"는 서사와도 맞고, EE 코드의 공동 학습 손해를 물려받지 않는다.
+
+### 1-2. 왜 val 확률까지 필요한가
 
 캘리브레이션(온도 T)과 사전확률 보정(c)은 **반드시 val에서 정해야** 한다.
-test에서 맞추면 테스트셋 피팅이다. 그런데 현재 `--save-probs`는 test 확률만 저장한다.
+test에서 맞추면 테스트셋 피팅이다. fold마다 모델이 다르므로 **T와 c도 fold별로 따로** 구한다.
 
-또 fold마다 모델이 다르므로 **T와 c도 fold별로 따로** 구해야 한다.
+### 1-3. 구현
 
-### 1-2. 수정 내용
-
-`main()`의 fold 루프에서 test와 함께 val도 추론해 저장한다.
+`evaluate.py`의 `train_eval_config()` fold 루프에서, best 체크포인트 로드 후
+test와 val 양쪽을 추론해 모은다. 이미 `run_epoch`이 `probs`를 반환하므로 배선만 하면 된다.
 
 ```python
-# fold 루프 안, 기존 test 추론 뒤에 추가
-val_loader = DataLoader(WindowDataset(X[va], y[va]), batch_size=args.batch_size)
-val_probs  = exit_probs(model, val_loader, device)
-saved_val.append((val_probs[:, :, 1], va, fold))
+# 기존: _, acc, preds, labels, probs = run_epoch(model, test_loader, ...)
+# val도 같은 방식으로 한 번 더 추론해 모은다
+_, _, _, val_labels, val_probs = run_epoch(model, val_loader, criterion, device)
+saved_test.append((probs, te, fold))
+saved_val.append((val_probs, va, fold))
 ```
 
-`--save-probs` 저장부에 val 배열을 추가한다.
+저장:
 
 ```python
 np.savez_compressed(
-    path,
-    prob=prob, test_idx=test_idx, fold=fold_of, y=y[test_idx],
-    val_prob=val_prob, val_idx=val_idx, val_fold=val_fold_of, val_y=y[val_idx],
-    exit_flops=exit_flops,
+    f"results/probs_{cfg['name']}{sfx}.npz",
+    prob=test_prob, test_idx=test_idx, fold=test_fold, y=y[test_idx],
+    val_prob=val_prob, val_idx=val_idx, val_fold=val_fold, val_y=y[val_idx],
+    mflops=flops,
 )
 ```
 
-> **주의** — test는 fold를 가로질러 전체를 정확히 한 번씩 덮지만(`GroupKFold`),
-> **val은 fold마다 겹칠 수 있다.** 기존 test용 `assert len(np.unique(test_idx)) == len(test_idx)`를
-> val에 그대로 적용하면 안 된다. val은 fold 태그를 붙여 fold별로만 쓴다.
+> **함정** — test는 `GroupKFold`라 fold를 가로질러 전체를 정확히 한 번씩 덮지만,
+> **val은 fold마다 겹칠 수 있다.** test용 `assert len(np.unique(idx)) == len(idx)`를
+> val에 그대로 쓰면 터진다. val은 fold 태그를 붙여 fold별로만 사용한다.
 
-### 1-3. 실행
+### 1-4. 실행
 
 ```bash
-python earlyexit.py --data-path data/windows_2s.npz --n-layers 6 --save-probs --seed 42
-python earlyexit.py --data-path data/windows_2s.npz --n-layers 6 --save-probs --seed 1
-python earlyexit.py --data-path data/windows_2s.npz --n-layers 6 --save-probs --seed 7
+for s in 42 1 7; do
+  python evaluate.py --suite depth --configs p16d128L1 \
+    --data-path data/windows_2s.npz --seed $s --save-probs
+done
 ```
 
-산출: `results/probs_L6.npz`, `probs_L6_s1.npz`, `probs_L6_s7.npz`
+산출: `results/probs_p16d128L1_depth_2s.npz` 외 시드별 2개
 
 **이후 모든 단계는 이 파일만 읽는다. 재학습은 없다.**
 
-### 1-4. 어느 출구를 쓰는가
+### 1-5. 참고 — 정적 L1의 연산량
 
-**출구 1**을 쓴다 (`--exit 0`, 기본값).
+| 설정 | MFLOPs | 파라미터 |
+|---|---:|---:|
+| 정적 p16d128 **L1** | **588.2** | 136,206 |
+| 정적 p16d128 L6 | 3,498.8 | 798,606 |
 
-- 깊이 축 결론상 출구 1이 가장 좋고 가장 싸다 (20.7 MFLOPs, .7546)
-- 시간 축 절감과 깊이 축 절감이 곱해지는 구성이 된다
+깊이 축에서 이미 확보한 절감이 **5.9배**다. 시간 축 절감은 여기에 곱해진다.
 
-> **한계로 명시할 것** — 6층 공동 학습 모델의 출구 1은 독립 학습한 1층 모델과 같지 않다.
-> 최종 주장에는 정적 1층 모델로 재현이 필요하다 (§8 후속).
+> **MFLOPs 정정 주의** — 이전 판과 옛 논문 초안은 EE 출구 연산량을 `20.67 → 109.03`으로
+> 적었으나 이는 patch 100/50 · d64 설정의 값이다. patch 16/8 · d128의 실제 값은
+> `588.2 → 3,498.8`(층당 증분 582.11)이다. `docs/depth_ee_findings.md` §1-2 참조.
 
 ---
 
@@ -103,8 +136,8 @@ python earlyexit.py --data-path data/windows_2s.npz --n-layers 6 --save-probs --
 
 ```
 윈도우별 증거      e_i = logit(p_i) - c
-드리프트           d_s = mean(e_i)              한 윈도우당 평균 증거
-필요 관측량 추정   n*_s = A / |d_s|             Wald 근사, A는 α=0.05 기준 경계
+드리프트           d_s = mean(e_i)            한 윈도우당 평균 증거
+필요 관측량 추정   n*_s = A / |d_s|           Wald 근사, A는 α=0.05 기준 경계
 ```
 
 `n*`는 **"이 사람을 판정하려면 윈도우가 몇 개 필요한가"** 의 이론적 추정치다.
@@ -137,9 +170,12 @@ python earlyexit.py --data-path data/windows_2s.npz --n-layers 6 --save-probs --
 | **4~7명** | 조건부 진행 | 유보 옵션과 비대칭 경계를 **필수**로. 명목 α 보장은 주장하지 않는다 |
 | **8명 이상** | 재설계 | 정지 규칙이 아니라 모델·특징 쪽 문제. §8 대안 검토 |
 
-> **예측** — 윈도우 정확도 .75인 표본 82개가 독립이라면 다수결 정확도는 계산상 거의 100%다.
-> 실제 피험자 정확도는 80% 근처다. 이 격차는 **오류가 사람 단위로 쏠려 있다**는 뜻이므로,
-> C 유형이 적지 않을 것으로 예상한다. 4~7명 구간을 기본 시나리오로 준비한다.
+> **예측** — 윈도우 정확도 .78인 표본 82개가 독립이라면 다수결 정확도는 계산상 거의 100%다.
+> 실제 피험자 정확도는 88% 근처다(정적 L1). 이 격차는 **오류가 사람 단위로 쏠려 있다**는
+> 뜻이므로 C 유형이 적지 않을 것으로 예상한다. 4~7명 구간을 기본 시나리오로 준비한다.
+>
+> 다만 정적 L1의 피험자 정확도(.8846)가 EE 출구 1(.7979)보다 8.7%p 높으므로,
+> **C 유형 인원은 rev1 예상보다 줄어들 가능성이 있다.** 이것도 [B]에서 확인된다.
 
 ---
 
@@ -169,10 +205,14 @@ T는 val 윈도우의 NLL을 최소화하는 값으로 정한다.
 **fold별 train 집합에서 해석적으로 계산한다.**
 
 ```
-π_PD / π_HC = (n_patient × 1.0) / (n_healthy × 2.0)
+π_PD / π_HC = (n_patient × w_patient) / (n_healthy × w_healthy)
 ```
 
-전체 기준으로는 `8607 / (4867 × 2) = 0.884`, `c = log(0.884) ≈ -0.123`.
+전체 기준으로는 `8607 × 1.0 / (4867 × 2.0) = 0.884`, `c = log(0.884) ≈ -0.123`.
+
+> **`--auto-class-weight`를 쓴 경우** 가중치가 fold별 train 분포에서 계산되므로
+> c도 fold마다 달라진다. 확률을 뽑을 때 쓴 옵션을 그대로 반영해야 한다.
+> 기본 실행(고정 2.0/1.0)이면 위 식 그대로다.
 
 test에서 c를 스윕해 고르면 안 된다. val에서 **부호 분리 확인만** 한다 —
 val의 환자 피험자 평균 LLR > 0, 정상 피험자 평균 LLR < 0 이 성립하는지.
@@ -193,24 +233,54 @@ val의 환자 피험자 평균 LLR > 0, 정상 피험자 평균 LLR < 0 이 성�
 
 ---
 
-## 4. [D] 본 실험 — `sequential_exit.py` 수정
+## 4. [D] 본 실험 — `stream.py` · `sequential_exit.py` 신규 작성
 
-### 4-1. 수정 ① 유보(defer) 상태
+### 4-1. `stream.py` — 윈도우 배열을 시간순 스트림으로 복원
 
-현재 `run_sprt`는 경계 미도달 시 부호로 판정을 강제한다.
+npz에는 시간 인덱스 필드가 없지만 필요 없다. 윈도우가 50% 겹침 슬라이딩으로 생성돼
+배열에 시간순으로 저장돼 있고, `X[i]`의 후반부와 `X[i+1]`의 전반부가 정확히 일치한다.
 
-```python
-# 현재 (sequential_exit.py:102)
-return int(total > 0), len(evidence), False, total
+| 함수 | 역할 |
+|---|---|
+| `build_runs(subject_id, task)` | subject 또는 task가 바뀌는 지점을 경계로 run 번호 부여 |
+| `verify_overlap(X, run_id)` | `X[i]` 후반부 == `X[i+1]` 전반부 검증. **순차 실험 전 필수** |
+| `subject_streams(..., subsample)` | `{subject: [run별 인덱스 배열]}`. `subsample=True`면 run 안에서 `[::2]` |
+
+**용어**
+- **run** — 연속 녹음 구간 하나. (subject, task)가 같고 배열 인덱스가 연속인 구간.
+  2초 데이터 기준 총 780개, 길이 중앙값 14 윈도우(약 15초)
+- **stream** — 한 피험자의 run 목록
+
+**왜 run 단위인가**
+1. run 내부 인접 윈도우는 50% 겹쳐 독립이 아니다 → `[::2]`로 솎으면 정확히 비중첩
+2. run 사이에는 겹침이 없다 → run 단위로 멈추면 독립성이 자동 확보
+3. 임상적으로 정지 단위가 "과제를 한 번 더 시킬 것인가"가 되어 자연스럽다
+
+### 4-2. `sequential_exit.py` — SPRT와 baseline
+
+```
+Λ_n = Σ log[ p(x_i|PD) / p(x_i|HC) ]
+A = log((1-β)/α)     상단 경계 → PD 판정
+B = log(β/(1-α))     하단 경계 → HC 판정
+그 사이               → 하나 더 관측
 ```
 
-이를 **유보**로 바꾼다. 판정값에 `-1`을 도입한다.
+| 함수 | 역할 |
+|---|---|
+| `llr(prob, prior_logit)` | `logit(p) - c`. 수치 안정 위해 확률 클리핑 |
+| `boundaries(alpha, beta)` | Wald 경계 A, B |
+| `run_sprt(evidence, groups, A, B)` | run 경계에서만 확인. **미도달 시 유보(-1)** |
+| `run_fixed_runs(evidence, groups, R)` | run R개만 보고 판정 — *같은 정지 단위의 baseline* |
+| `run_fixed(evidence, k)` | 윈도우 k개 (참고용) |
+| `run_random(evidence, k, rng)` | 무작위 k개 — 시간 순서 정보 유효성 검정 |
+
+**유보(defer)는 처음부터 넣는다.** 경계 미도달 시 부호로 판정을 강제하지 않는다.
 
 ```python
 return -1, len(evidence), False, total     # -1 = 유보
 ```
 
-`evaluate()`도 3분류로 바꾼다. 유보를 오답으로 세면 지표가 왜곡된다.
+`evaluate()`도 3분류로:
 
 ```python
 decided = d >= 0
@@ -222,59 +292,41 @@ decided = d >= 0
 ```
 
 > **주의** — 유보를 도입하면 판정률이 낮아질수록 판정 정확도가 자동으로 올라간다.
-> **판정률과 정확도는 반드시 쌍으로 보고**한다. 정확도만 떼어 보고하면 무의미하다.
+> **판정률과 정확도는 반드시 쌍으로 보고**한다. 정확도만 떼면 무의미한 숫자다.
 
-### 4-2. 수정 ② 비대칭 경계
-
-현재 `sweep()`은 `boundaries(a, a)`로 α = β만 훑는다.
-`boundaries()` 자체는 이미 두 인자를 받으므로 호출부만 고치면 된다.
-
-```python
-for a in args.alphas:
-    for b in args.betas:
-        A, B = boundaries(a, b)
-        ...
-        rows.append(dict(method="sprt", alpha=a, beta=b, ...))
-```
-
-스크리닝은 **위음성(환자 놓침)이 위험**하므로 β를 α보다 작게 잡는 영역이 관심 대상이다.
+**비대칭 경계를 처음부터 지원한다.** 스크리닝은 위음성(환자 놓침)이 위험하므로
+β를 α보다 작게 잡는 영역이 관심 대상이다.
 
 ```
 --alphas 0.30 0.20 0.10 0.05
 --betas  0.10 0.05 0.02 0.01
 ```
 
-### 4-3. 수정 ③ 고정 baseline을 run 단위로
-
-`--unit run`이면 SPRT는 run 경계에서만 판정하는데,
-현재 `run_fixed(evidence, k)`는 윈도우 k개 단위라 비교 단위가 어긋난다.
-
-**run R개를 보는 `run_fixed_runs(evidence, groups, R)`를 추가**해서,
-같은 정지 단위에서 비교한다. 윈도우 단위 fixed도 참고용으로 유지한다.
-
-### 4-4. 실행 설계
+### 4-3. 실행 설계
 
 | 축 | 값 | 비고 |
 |---|---|---|
+| 확률 공급원 | **정적 p16d128L1** | §1-1 |
 | 정지 단위 | **run** (기본) / window | run이 임상 프로토콜에 대응 |
 | 스트림 | **비중첩** (기본) / 겹침 | 겹침은 독립 가정 위반, 비교용만 |
-| 출구 | 1 | §1-4 |
 | 시드 | 42 / 1 / 7 | 전 과정 반복, 평균 ± 표준편차 |
 | 경계 | α 4개 × β 4개 = 16 | §4-2 |
-| baseline | all / fixed-R / fixed-N / random-N | §4-3 |
+| baseline | all / fixed-R / fixed-N / random-N | §4-2 |
 
 ```bash
+python stream.py --data-path data/windows_2s.npz     # 먼저 겹침 검증
+
 for s in "" "_s1" "_s7"; do
   python sequential_exit.py \
-    --probs results/probs_L6${s}.npz \
-    --calib results/calib_L6${s}.json \
-    --unit run --exit 0 \
+    --probs results/probs_p16d128L1_depth_2s${s}.npz \
+    --calib results/calib_p16d128L1${s}.json \
+    --unit run \
     --alphas 0.30 0.20 0.10 0.05 \
     --betas  0.10 0.05 0.02 0.01
 done
 ```
 
-### 4-5. 반드시 함께 내는 검증표
+### 4-4. 반드시 함께 내는 검증표
 
 가장 중요한 표다. **SPRT의 오류율 보장이 실제로 지켜지는가.**
 
@@ -301,7 +353,6 @@ done
 
 **점끼리 비교하지 않는다. 곡선끼리 비교한다.**
 같은 시간에서 SPRT 곡선이 fixed 곡선 위에 있어야 이득이다.
-
 판정률은 점 크기 또는 별도 패널로 인코딩한다.
 
 ### 5-2. 주 표
@@ -313,8 +364,8 @@ done
 
 ### 5-3. 자동 판정
 
-`verdict()`가 이미 구현돼 있다(`sequential_exit.py:251`). 유보 도입에 맞춰
-"동일 **판정률 및** 정확도에서 더 짧은가"로 조건을 강화한다.
+`verdict()`를 구현해 사전 등록 조건을 코드가 판정하게 한다(§6).
+사람이 표를 보고 해석하면 결론이 흔들린다.
 
 ---
 
@@ -322,7 +373,7 @@ done
 
 ### 6-1. 성공 조건
 
-> 어떤 (α, β) 운영점에서, **같은 판정률과 같은 판정 정확도**를 내는 최선의 fixed보다
+> 어떤 (α, β) 운영점에서, **같은 판정률과 같은 판정 정확도**를 내는 최선의 fixed-R보다
 > SPRT의 평균 관측 시간이 짧다.
 
 ### 6-2. 반증 조건
@@ -345,10 +396,12 @@ done
 | # | 항목 | 내용 |
 |---|---|---|
 | 1 | **피험자 내 상관** | 서브샘플링은 겹침만 제거한다. 같은 사람·같은 펜·같은 과제라는 상관은 남아 증거가 진실보다 빨리 쌓인다 → 실측 오류율이 명목보다 나쁠 것 |
-| 2 | **출구 1 ≠ 1층 모델** | 6층 공동 학습 모델의 첫 출구다. 정적 1층 모델로 재현 필요 |
-| 3 | **유보의 임상적 비용** | 유보 = 병원 재검. 이 비용을 0으로 두고 계산하고 있다 |
-| 4 | **오프라인 시뮬레이션** | 실제 순차 추론 경로를 구현·측정하지 않았다 |
-| 5 | **단일 데이터셋** | `windows_1s` / `windows_4s`로 윈도우 길이 일반화 확인 필요 |
+| 2 | **유보의 임상적 비용** | 유보 = 병원 재검. 이 비용을 0으로 두고 계산하고 있다 |
+| 3 | **오프라인 시뮬레이션** | 실제 순차 추론 경로를 구현·측정하지 않았다 |
+| 4 | **단일 데이터셋** | `windows_1s` / `windows_4s`로 윈도우 길이 일반화 확인 필요 |
+| 5 | **피험자당 윈도우 편차** | 82~801로 10배 차이. 윈도우 지표가 오래 쓴 피험자에게 가중된다 |
+
+> rev1에 있던 "출구 1 ≠ 1층 모델" 한계는 **해소됐다** — 정적 L1을 직접 쓰므로.
 
 ---
 
@@ -358,27 +411,43 @@ done
 
 정지 규칙이 아니라 모델 쪽 문제다. 검토 순서:
 
-1. **어떤 사람이 C인가** — 과제 종류, 윈도우 수, 나이·중증도와의 관계 확인
+1. **어떤 사람이 C인가** — 과제 종류, 윈도우 수와의 관계 확인
 2. **과제별 가중** — 특정 과제(spiral / meander / circle / diadochokinesis)에서만
    신호가 뒤집히는지 확인. 그렇다면 과제별 신뢰도 가중을 둔다
 3. **유보 비율을 높인다** — 판정률 50%에 정확도 95%도 스크리닝으로는 유효한 결과다
 
-### 8-2. 최종 주장을 완성하려면
+### 8-2. 최종 주장
 
-- **정적 1층 모델 + 적응적 관측**으로 재현 → 두 축 절감의 곱
-- 깊이 축 통제 대조군(E1) 실행 → 실험 1 결론 확정
-- batch=1 실측 지연시간
+깊이 축과 시간 축의 절감이 곱해진다.
+
+```
+정적 L1 (깊이 5.9배)  ×  적응적 관측 (시간 N배)
+```
+
+깊이 축은 E1로 이미 확정됐다. 시간 축만 실험 2가 채우면 된다.
+
+### 8-3. 실험 1 잔여
+
+| # | 항목 | 상태 |
+|---|---|---|
+| E1 | 통제된 정적 깊이 대조군 | ✅ **완료** |
+| E2 | 시드 3개 → 7개 확장 | 미실시 |
+| E3 | 1초 / 4초 윈도우 재현 | 미실시 |
+| E4 | batch=1 CPU 벽시계 측정 | 미실시 (§2-7에 간접 증거) |
+| — | README가 옛 결론 유지 중 | 미수정 |
+| — | 논문 인용 정리 | 미수정 |
 
 ---
 
 ## 부록. 체크리스트
 
 **[A] 확률 확보**
-- [ ] `earlyexit.py`에 val 확률 저장 추가 (val은 fold 간 중복 가능 — assert 분리)
-- [ ] 시드 42 / 1 / 7로 `--save-probs` 실행
+- [ ] `stream.py` / `sequential_exit.py` 사본이 다른 PC에 있는지 확인
+- [ ] `evaluate.py`에 `--save-probs` 추가 (test + val, val은 fold 중복 허용)
+- [ ] 정적 `p16d128L1`, 시드 42 / 1 / 7로 실행
 
 **[B] 사전 점검 ★ 게이트**
-- [ ] `analyze_drift.py` 작성 — 드리프트, `n*`, A·B·C 분류
+- [ ] `analyze_drift.py` — 드리프트, `n*`, A·B·C 분류
 - [ ] 히스토그램으로 단봉 여부 확인
 - [ ] `n*` 기준 5 / 10 / 20에서 각각 계수
 - [ ] 시드 3개에서 C 인원 재현성 확인
@@ -386,20 +455,18 @@ done
 
 **[C] 캘리브레이션**
 - [ ] `calibrate.py` — fold별 T (val NLL 격자 탐색)
-- [ ] fold별 c (train 분포에서 해석적 계산)
+- [ ] fold별 c (train 분포에서 해석적 계산, `--auto-class-weight` 여부 반영)
 - [ ] val에서 부호 분리 확인
 - [ ] 교정 전후 NLL · ECE · **C 유형 인원** 비교표
 
 **[D] 본 실험**
-- [ ] `run_sprt` 유보 상태(-1) 도입
-- [ ] `evaluate()` 3분류 지표로 변경
-- [ ] α ≠ β 격자 스윕
-- [ ] `run_fixed_runs()` 추가 — 같은 정지 단위 비교
+- [ ] `stream.py` — `verify_overlap`으로 배열 순서 = 시간 순서 검증
+- [ ] `sequential_exit.py` — 유보(-1) 포함, α ≠ β 격자, `run_fixed_runs`
 - [ ] 시드 3개 실행
 - [ ] **명목 vs 실측 오류율 표**
 
 **[E] 보고**
 - [ ] (시간, 정확도) 곡선 — SPRT / fixed-R / random / all
 - [ ] 3지표 표, 시드 평균 ± 표준편차
-- [ ] `verdict()` 자동 판정 (판정률 조건 추가)
+- [ ] `verdict()` 자동 판정
 - [ ] 한계 5개 기술
