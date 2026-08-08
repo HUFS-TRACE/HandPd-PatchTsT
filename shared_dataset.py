@@ -127,9 +127,18 @@ def synthetic(n_subjects, n_channels, seq_len, win_per_subject=8, seed=0):
     테스트가 의미 있다.
     """
     rng = np.random.default_rng(seed)
+
+    # 라벨을 피험자 번호 순서와 어긋나게 섞는다.
+    #   s % 2 로 주면 GroupKFold(층화 없음)가 홀/짝 피험자를 그대로 fold로 갈라
+    #   train이 전부 정상 · test가 전부 환자가 된다. 그러면 학습에서 test 클래스를
+    #   한 번도 못 봐 정확도가 0으로 나오고, 파이프라인 점검이 무의미해진다.
+    #   (실제로 겪음 — README §7 "GroupKFold는 층화를 하지 않는다"의 사례)
+    labels = np.array([i % 2 for i in range(n_subjects)])
+    rng.shuffle(labels)
+
     X, y, sid = [], [], []
     for s in range(n_subjects):
-        label = s % 2                                  # 절반씩 정상/환자
+        label = int(labels[s])                         # 절반씩 정상/환자
         freq  = 3.0 if label == 0 else 11.0            # 라벨을 주파수에 심는다
         t = np.linspace(0, 1, seq_len, dtype=np.float32)
         for _ in range(win_per_subject):

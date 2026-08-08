@@ -1,0 +1,2 @@
+modality,n_subjects,n_windows,d_model,n_layers,patch_len,stride,n_tokens,window_acc,window_std,subject_acc,subject_acc_std,subject_acc_soft,roc_auc,mean_epochs,params_shared,params_own,shared_ratio,pair_mode,seed
+voice,235,7658,64,6,24,12,15,0.6912,0.0282,0.6811,0.0495,0.6812,0.7317,8.2,200832,12002,0.9436,longest,42
