@@ -21,6 +21,7 @@ FLOPs 주석
     단위는 "샘플 1개당 순전파 FLOPs".
 """
 import argparse
+import csv
 import os
 
 import numpy as np
@@ -36,6 +37,8 @@ from torch.utils.flop_counter import FlopCounterMode
 from dataset import WindowDataset, load_npz, subject_kfold
 from model import PatchTSTClassifier
 from train import run_epoch
+from protocol import (add_common_args, apply_config_file, check_protocol,
+                      filter_subjects, get_folds, run_tag)
 
 plt.rcParams["font.family"] = "Malgun Gothic"
 plt.rcParams["axes.unicode_minus"] = False
@@ -113,46 +116,36 @@ SIZE_CONFIGS = [
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="FLOPs 측정 + Pareto 곡선")
-    p.add_argument("--data-path",    default="data/windows.npz")
-    p.add_argument("--epochs",       type=int,   default=50)
-    p.add_argument("--batch-size",   type=int,   default=64)
-    p.add_argument("--lr",           type=float, default=1e-3)
-    p.add_argument("--weight-decay", type=float, default=1e-4)
-    p.add_argument("--patience",     type=int,   default=10)
-    p.add_argument("--seed",         type=int,   default=42)
-    p.add_argument("--n-folds",      type=int,   default=5)
-    p.add_argument("--dropout",      type=float, default=0.2)
-    p.add_argument("--head-dropout", type=float, default=0.2)
-    p.add_argument("--class-weight-healthy", type=float, default=2.0)
-    p.add_argument("--class-weight-patient", type=float, default=1.0)
-    # ── 평가 프로토콜·정규화 실험용 (기본값은 기존 동작 유지) ──
-    p.add_argument("--stratified", action="store_true",
-                   help="StratifiedGroupKFold 사용 (기본: GroupKFold, 층화 없음)")
-    p.add_argument("--val-size", type=float, default=0.1,
-                   help="train_val에서 val로 뗄 비율. 10-fold면 val이 5~6명까지 줄어든다")
-    p.add_argument("--auto-class-weight", action="store_true",
-                   help="클래스 가중치를 train fold의 역빈도로 계산 (기본: 상수 2.0/1.0)")
-    p.add_argument("--label-smoothing", type=float, default=0.0,
-                   help="CE 라벨 스무딩. softmax 과신을 줄여 확신도를 정확도에 맞춘다")
-    p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    p = argparse.ArgumentParser(
+        description="FLOPs 측정 + 정확도-연산량 Pareto 곡선")
 
-    p.add_argument("--verbose", "-v", action="store_true",
-                   help="epoch마다 train/val loss·acc 출력")
-    p.add_argument("--dry-run",   action="store_true", help="학습 없이 FLOPs 표만 출력")
-    p.add_argument("--plot-only", action="store_true", help="기존 CSV로 곡선만 다시 그리기")
-    p.add_argument("--ckpt",      default=None, help="학습된 체크포인트 1개만 평가")
-    p.add_argument("--configs",   default=None,
-                   help="쉼표로 구분한 설정 이름 (기본: 전체). 예: tiny,baseline")
-    p.add_argument("--suite", default="default",
-                   choices=["default", "patch", "size", "head", "depth"],
-                   help="설정 묶음: default(원래 6종) / patch(패치 크기) / "
-                        "size(모델 크기) / head(어텐션 head 수) / "
-                        "depth(E1 통제 깊이 대조군, EE와 동일 백본)")
-    return p.parse_args()
+    # 데이터·학습·클래스가중 인자는 protocol.py가 단일 출처다.
+    # train.py와 같은 이름·같은 기본값을 쓰기 위한 것이며, 여기서 따로
+    # 정의하면 두 스크립트가 어긋나 결과를 나란히 놓을 수 없게 된다.
+    add_common_args(p)
 
+    g = p.add_argument_group("실행")
+    g.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    g.add_argument("--verbose", "-v", action="store_true",
+                   help="epoch마다 train/val loss 출력")
+    g.add_argument("--dry-run",   action="store_true", help="학습 없이 FLOPs 표만 출력")
+    g.add_argument("--plot-only", action="store_true", help="기존 CSV로 곡선만 다시 그리기")
+    g.add_argument("--ckpt",      default=None, help="학습된 체크포인트 1개만 평가")
+    g.add_argument("--configs",   default=None,
+                   help="쉼표로 구분한 설정 이름. 생략하면 suite 전체")
+    g.add_argument("--suite", default="default",
+                   help="default / patch / size / head / depth")
+    g.add_argument("--save-ckpt", action="store_true",
+                   help="fold별 학습된 모델을 results/ckpt_*.pt로 남긴다. "
+                        "XAI(X1 occlusion)는 '그 피험자를 학습에 쓰지 않은 모델'로 "
+                        "돌려야 하므로 fold별로 따로 있어야 한다.")
+    g.add_argument("--save-probs", action="store_true",
+                   help="윈도우별 test 예측 확률을 results/probs_*.npz로 저장한다. "
+                        "V3(증거 수 축)가 이 파일만 읽어 재학습 없이 돌아간다.")
 
-# ─────────────────────────── FLOPs ───────────────────────────
+    args = p.parse_args()
+    return apply_config_file(args)
+
 
 def build_model(cfg, seq_len, num_channels, num_classes, args):
     return PatchTSTClassifier(
@@ -234,7 +227,7 @@ def subject_vote_both(pred, probs, subj, ytrue):
             subject_vote_soft(probs, subj, ytrue))
 
 
-def train_eval_config(cfg, X, y, subject_id, folds, args):
+def train_eval_config(cfg, X, y, subject_id, folds, args, task=None):
     """한 설정을 n-fold 학습·평가 → (윈도우acc, 피험자acc, AUC, FLOPs, 파라미터)."""
     device = torch.device(args.device)
     # PID를 넣어 프로세스마다 다른 파일을 쓰게 한다.
@@ -243,6 +236,8 @@ def train_eval_config(cfg, X, y, subject_id, folds, args):
     ckpt = os.path.join(RESULT_DIR, f"_tmp_{cfg['name']}_{os.getpid()}.pt")
     win_accs, subj_accs, subj_accs_soft, aucs, gaps = [], [], [], [], []
     curves = []                                    # fold별 학습 곡선 (loss 그래프용)
+    fold_rows = []                                 # fold별 원본 수치 (검정용)
+    prob_rows = []                                 # 윈도우별 예측 확률 (V3용)
     flops = params = None
 
     for fold, (tr, va, te) in enumerate(folds):
@@ -270,6 +265,7 @@ def train_eval_config(cfg, X, y, subject_id, folds, args):
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="min", factor=0.5, patience=3)
 
+        cw_used = list(np.round(np.asarray(cw, dtype=float), 4))
         best_val, no_improve, best_epoch = float("inf"), 0, 0
         hist = []                                  # (epoch, train_loss, train_acc, val_loss, val_acc)
         for epoch in range(1, args.epochs + 1):
@@ -297,15 +293,64 @@ def train_eval_config(cfg, X, y, subject_id, folds, args):
                 break
 
         curves.append(hist)
+        if args.save_ckpt:
+            # fold 번호와 시드를 파일명에 넣는다. 어느 모델이 어느 피험자를
+            # 학습에 안 썼는지가 XAI의 전제이므로 test 피험자 명단도 함께 남긴다.
+            keep = os.path.join(
+                RESULT_DIR,
+                f"ckpt_{cfg['name']}_f{fold}_s{args.seed}{args.ckpt_tag}.pt")
+            torch.save({"state_dict": torch.load(ckpt),
+                        "config": cfg, "fold": fold, "seed": args.seed,
+                        "test_subjects": sorted(set(subject_id[te].tolist())),
+                        "seq_len": X.shape[2], "num_channels": X.shape[1],
+                        "dropout": args.dropout, "head_dropout": args.head_dropout},
+                       keep)
+            print(f"    체크포인트 → {keep}")
         model.load_state_dict(torch.load(ckpt))
         _, acc, preds, labels, probs = run_epoch(model, test_loader, criterion, device)
         win_accs.append(acc)
+        if args.save_probs:
+            # 윈도우 하나가 한 행. 재학습 없이 다시 집계할 수 있게 원본을 남긴다.
+            prob_rows.append(dict(
+                prob=probs.astype(np.float32), y=labels.astype(np.int8),
+                subject=subject_id[te],
+                task=(task[te] if task is not None
+                      else np.array([""] * len(te))),
+                fold=np.full(len(te), fold, dtype=np.int8)))
         sa_hard, sa_soft = subject_vote_both(preds, probs, subject_id[te], labels)
         subj_accs.append(sa_hard)
         subj_accs_soft.append(sa_soft)
         aucs.append(roc_auc_score(labels, probs))
         # 과적합 진단: 마지막 epoch의 train/val loss 간극
         gaps.append(hist[-1][3] - hist[-1][1])
+        # 평균을 내기 전의 fold별 값을 남긴다.
+        #   TOST는 fold × seed 대응 쌍이 있어야 돌아가고, R군의 신뢰구간도
+        #   원본 없이는 못 낸다. 예전에는 여기서 np.mean만 남기고 버려서
+        #   결과가 나온 뒤에 검정을 하려면 전부 다시 돌려야 했다.
+        fold_rows.append(dict(
+            name=cfg["name"], fold=fold, seed=args.seed,
+            n_layers=cfg["n_layers"], patch_len=cfg["patch_len"],
+            stride=cfg["stride"], d_model=cfg["d_model"], d_ff=cfg["d_ff"],
+            window_acc=round(float(acc), 6),
+            subject_acc=round(float(sa_hard), 6),
+            subject_acc_soft=round(float(sa_soft), 6),
+            roc_auc=round(float(aucs[-1]), 6),
+            n_test_windows=int(len(te)),
+            n_test_subjects=int(len(set(subject_id[te]))),
+            n_test_patient_windows=int((y[te] == 1).sum()),
+            epochs=len(hist), best_epoch=best_epoch,
+            overfit_gap=round(float(gaps[-1]), 6),
+            class_weight="|".join(str(c) for c in cw_used),
+            data=os.path.basename(args.data_path),
+            subset=(os.path.basename(args.subjects_file)
+                    if args.subjects_file else "full"),
+            n_folds=args.n_folds, val_size=args.val_size,
+            stratified=int(args.stratified),
+            auto_class_weight=int(args.auto_class_weight),
+            label_smoothing=args.label_smoothing,
+            epochs_max=args.epochs, patience=args.patience,
+            batch_size=args.batch_size, lr=args.lr,
+        ))
         print(f"    fold {fold+1}/{len(folds)}  윈도우 {acc:.3f}  "
               f"피험자 hard {sa_hard:.3f} / soft {sa_soft:.3f}  "
               f"AUC {aucs[-1]:.3f}  ep {len(hist)}(best {best_epoch})  "
@@ -320,7 +365,8 @@ def train_eval_config(cfg, X, y, subject_id, folds, args):
         roc_auc=float(np.mean(aucs)),
         mean_epochs=float(np.mean([len(h) for h in curves])),
         overfit_gap=float(np.mean(gaps)),
-        mflops=flops, params=params, curves=curves)
+        mflops=flops, params=params, curves=curves, fold_rows=fold_rows,
+        prob_rows=prob_rows)
 
 
 def plot_curves(curves_by_cfg, out_png):
@@ -450,6 +496,51 @@ def save_csv(rows, path):
     print(f"수치 저장: {path}")
 
 
+FOLD_COLS = ["name", "fold", "seed", "n_layers", "patch_len", "stride",
+             "d_model", "d_ff", "window_acc", "subject_acc", "subject_acc_soft",
+             "roc_auc", "n_test_windows", "n_test_subjects",
+             "n_test_patient_windows", "epochs", "best_epoch", "overfit_gap",
+             "class_weight",
+             # 아래는 실행 조건. 행마다 자기 조건을 들고 있어야 두 사람의
+             # 결과를 합쳤을 때 조건이 어긋난 행을 바로 걸러낼 수 있다.
+             "data", "subset", "n_folds", "val_size", "stratified",
+             "auto_class_weight", "label_smoothing", "epochs_max", "patience",
+             "batch_size", "lr"]
+
+
+def append_fold_csv(fold_rows, path):
+    """fold별 원본 수치를 long-format으로 덧붙인다.
+
+    설정 하나가 끝날 때마다 append하므로 중간에 끊겨도 남는다. 시드를 바꿔
+    다시 실행하면 같은 파일에 행이 쌓여, fold × seed 표가 그대로 만들어진다.
+    (같은 조건을 두 번 돌리면 행이 중복되니, 다시 돌릴 땐 파일을 지울 것.)
+    """
+    is_new = not os.path.exists(path)
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=FOLD_COLS, extrasaction="ignore")
+        if is_new:
+            w.writeheader()
+        w.writerows(fold_rows)
+    print(f"    fold 원본 수치 {len(fold_rows)}행 → {path}")
+
+
+def save_probs(prob_rows, path):
+    """윈도우별 test 예측 확률을 저장한다.
+
+    GroupKFold라 test fold가 전체를 정확히 한 번씩 덮으므로, fold를 이어 붙이면
+    전 윈도우가 정확히 한 번씩 들어간다. V3(증거 수 축)와 V2(피험자 간 난이도)가
+    이 파일만 읽어 재학습 없이 돌아간다.
+    """
+    if not prob_rows:
+        return
+    cat = lambda k: np.concatenate([r[k] for r in prob_rows])
+    prob, y, subject = cat("prob"), cat("y"), cat("subject")
+    assert len(np.unique(subject)) == len(set(subject.tolist()))
+    np.savez_compressed(path, prob=prob, y=y, subject=subject,
+                        task=cat("task"), fold=cat("fold"))
+    print(f"    윈도우 확률 {len(prob)}개 → {path}")
+
+
 def load_csv(path):
     rows = []
     with open(path, encoding="utf-8") as f:
@@ -476,34 +567,28 @@ def main():
     args = parse_args()
     os.makedirs(RESULT_DIR, exist_ok=True)
     # 스윕·데이터별로 파일을 나눠 이전 결과를 덮어쓰지 않는다
+    # 실행 조건 태그. 조건이 다른 실행끼리 결과 파일을 덮어쓰지 않게 한다.
+    #   --configs로 일부만 돌리면 CSV가 그 설정만 담은 채 덮어쓰므로,
+    #   고른 설정 이름도 태그에 넣는다.
     tag = args.suite if args.suite != "default" else ""
-    ds = os.path.basename(args.data_path).replace("windows", "").replace(".npz", "")
-    seed_tag = "" if args.seed == 42 else f"s{args.seed}"
-    lr_tag = "" if args.lr == 1e-3 else f"lr{args.lr:g}"
-    bs_tag = "" if args.batch_size == 64 else f"bs{args.batch_size}"
-    fd_tag = "" if args.n_folds == 5 else f"fold{args.n_folds}"
-    pt_tag = "" if args.patience == 10 else f"pat{args.patience}"
-    st_tag = "strat" if args.stratified else ""
-    vs_tag = "" if args.val_size == 0.1 else f"val{args.val_size:g}"
-    cw_tag = "autocw" if args.auto_class_weight else ""
-    ls_tag = "" if args.label_smoothing == 0 else f"ls{args.label_smoothing:g}"
-    # --configs로 설정을 골라 돌리면 CSV가 그 설정만 담은 채 덮어쓰기 때문에,
-    # 고른 설정 이름을 파일명에 넣어 서로 다른 실행이 충돌하지 않게 한다.
-    # (전체 suite를 돌릴 때는 붙이지 않아 기존 파일명이 유지된다.)
     cfg_tag = args.configs.replace(",", "-") if args.configs else ""
-    sfx = "_".join(s for s in (tag, cfg_tag, ds.strip("_"), lr_tag, bs_tag,
-                               fd_tag, pt_tag, st_tag, vs_tag, cw_tag, ls_tag,
-                               seed_tag) if s)
+    sfx = run_tag(args, extra=[tag, cfg_tag])
     sfx = f"_{sfx}" if sfx else ""
     csv_path = os.path.join(RESULT_DIR, f"pareto{sfx}.csv")
     png_path = os.path.join(RESULT_DIR, f"pareto{sfx}.png")
+    fold_csv = os.path.join(RESULT_DIR, f"folds{sfx}.csv")
+    args.ckpt_tag = sfx
 
     if args.plot_only:
         plot_pareto(load_csv(csv_path), png_path)
         return
 
+    check_protocol(args)
     torch.manual_seed(args.seed)
-    X, y, subject_id, _ = load_npz(args.data_path)
+    X, y, subject_id, task = load_npz(args.data_path)
+    # R4·R5 서브셋: 명단에 있는 피험자만 남긴다. 모델과 학습 조건은 그대로다.
+    X, y, subject_id, task = filter_subjects(X, y, subject_id, task,
+                                             args.subjects_file)
     seq_len, n_ch, n_cls = X.shape[2], X.shape[1], int(y.max() + 1)
     print(f"데이터 {args.data_path}  X{X.shape}  "
           f"정상 {(y==0).sum()} / 환자 {(y==1).sum()}  "
@@ -543,8 +628,7 @@ def main():
         return
 
     # ── 설정별 학습·평가 ──
-    folds = subject_kfold(subject_id, y, n_splits=args.n_folds, seed=args.seed,
-                          val_size=args.val_size, stratified=args.stratified)
+    folds = get_folds(subject_id, y, args)
     print(f"\n{len(configs)}개 설정 × {args.n_folds}-fold 학습 시작 "
           f"(device={args.device}). 오래 걸립니다.\n")
 
@@ -552,8 +636,11 @@ def main():
     for i, cfg in enumerate(configs, 1):
         print(f"[{i}/{len(configs)}] {cfg['name']}  "
               f"({flop_map[cfg['name']][0]/1e6:.1f} MFLOPs)", flush=True)
-        res = train_eval_config(cfg, X, y, subject_id, folds, args)
+        res = train_eval_config(cfg, X, y, subject_id, folds, args, task=task)
         curves_by_cfg[cfg["name"]] = res.pop("curves")
+        append_fold_csv(res.pop("fold_rows"), fold_csv)
+        save_probs(res.pop("prob_rows"),
+                   os.path.join(RESULT_DIR, f"probs_{cfg['name']}{sfx}.npz"))
         res["mflops"] = round(res["mflops"] / 1e6, 2)
         rows.append({**cfg, **{k: (round(v, 4) if isinstance(v, float) else v)
                                for k, v in res.items()}})

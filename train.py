@@ -10,43 +10,22 @@ from torch.utils.data import DataLoader
 
 from dataset import WindowDataset, load_npz, subject_kfold
 from model import PatchTSTClassifier
+from protocol import (add_common_args, apply_config_file, check_protocol,
+                      filter_subjects, get_folds)
 
 
 def parse_args():
     p = argparse.ArgumentParser(description="PatchTST 필기 분류 모델 학습")
 
-    # 데이터
-    p.add_argument("--data-path",     default="data/windows.npz")
+    # 인자 정의는 protocol.py 한 곳에 있다. evaluate.py와 같은 이름·같은
+    # 기본값을 써야 두 스크립트의 결과를 나란히 놓을 수 있다.
+    add_common_args(p, include_model_args=True)
 
-    # 학습
-    p.add_argument("--epochs",        type=int,   default=50)
-    p.add_argument("--batch-size",    type=int,   default=64)
-    p.add_argument("--lr",            type=float, default=1e-3)
-    p.add_argument("--weight-decay",  type=float, default=1e-4)
-    p.add_argument("--patience",      type=int,   default=10)
-    p.add_argument("--seed",          type=int,   default=42)
-    p.add_argument("--n-folds",       type=int,   default=5)
-
-    # 모델
-    p.add_argument("--patch-len",     type=int,   default=16)
-    p.add_argument("--stride",        type=int,   default=8)
-    p.add_argument("--d-model",       type=int,   default=128)
-    p.add_argument("--n-heads",       type=int,   default=8)
-    p.add_argument("--n-layers",      type=int,   default=3)
-    p.add_argument("--d-ff",          type=int,   default=256)
-    p.add_argument("--dropout",       type=float, default=0.2)
-    p.add_argument("--head-dropout",  type=float, default=0.2)
-
-    # 클래스 가중치 (정상:환자)
-    p.add_argument("--class-weight-healthy", type=float, default=2.0)
-    p.add_argument("--class-weight-patient", type=float, default=1.0)
-
-    # 기타
-    p.add_argument("--ckpt-path",     default="best_model.pt")
+    p.add_argument("--ckpt-path", default="best_model.pt")
     p.add_argument("--device",
                    default="cuda" if torch.cuda.is_available() else "cpu")
 
-    return p.parse_args()
+    return apply_config_file(p.parse_args())
 
 
 def run_epoch(model, loader, criterion, device, optimizer=None):
@@ -85,18 +64,20 @@ def run_epoch(model, loader, criterion, device, optimizer=None):
 
 def main():
     args = parse_args()
+    check_protocol(args)
     torch.manual_seed(args.seed)
 
     # 데이터 로드
     X, y, subject_id, task = load_npz(args.data_path)
+    # R4·R5 서브셋: 명단에 있는 피험자만 남긴다 (모델·학습 조건은 그대로).
+    X, y, subject_id, task = filter_subjects(X, y, subject_id, task,
+                                             args.subjects_file)
     print(f"X shape: {X.shape}")
     print(f"y 분포: 정상={(y==0).sum()}, 환자={(y==1).sum()}")
     print(f"고유 사용자: {len(set(subject_id))}명")
 
     # K-Fold 분할
-    folds = subject_kfold(subject_id, y,
-                          n_splits=args.n_folds,
-                          seed=args.seed)
+    folds = get_folds(subject_id, y, args)
 
     device       = torch.device(args.device)
     fold_results = []
@@ -138,12 +119,17 @@ def main():
             head_dropout = args.head_dropout,
         ).to(device)
 
-        # 클래스 가중치
-        class_weights = torch.tensor(
-            [args.class_weight_healthy, args.class_weight_patient],
-            dtype=torch.float32
-        ).to(device)
-        criterion = nn.CrossEntropyLoss(weight=class_weights)
+        # 클래스 가중치.
+        #   --auto-class-weight는 fold의 train 분포에서 역빈도로 다시 계산한다.
+        #   서브셋(R4·R5)은 클래스 비율이 전체와 뒤집히므로 이쪽이 주 실험이다.
+        if args.auto_class_weight:
+            cnt = np.bincount(y[train_idx], minlength=2)
+            cw = cnt.sum() / (2.0 * np.maximum(cnt, 1))
+        else:
+            cw = [args.class_weight_healthy, args.class_weight_patient]
+        class_weights = torch.tensor(cw, dtype=torch.float32).to(device)
+        criterion = nn.CrossEntropyLoss(weight=class_weights,
+                                        label_smoothing=args.label_smoothing)
 
         optimizer = torch.optim.AdamW(
             model.parameters(),

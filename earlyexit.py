@@ -28,6 +28,8 @@ from torch.utils.data import DataLoader
 
 from dataset import WindowDataset, load_npz, subject_kfold
 from model import PositionalEncoding, RevIN
+from protocol import (add_common_args, apply_config_file, check_protocol,
+                      filter_subjects, get_folds)
 
 
 class EarlyExitPatchTST(nn.Module):
@@ -246,31 +248,17 @@ def train_fold(model, train_loader, val_loader, criterion, args, ckpt):
 
 def parse_args():
     p = argparse.ArgumentParser(description="Early Exit PatchTST 학습·임계값 스윕")
-    p.add_argument("--data-path",    default="data/windows_2s.npz")
-    p.add_argument("--epochs",       type=int,   default=50)
-    p.add_argument("--batch-size",   type=int,   default=64)
-    p.add_argument("--lr",           type=float, default=1e-3)
-    p.add_argument("--weight-decay", type=float, default=1e-4)
-    p.add_argument("--patience",     type=int,   default=10)
-    p.add_argument("--seed",         type=int,   default=42)
-    p.add_argument("--n-folds",      type=int,   default=5)
-    p.add_argument("--patch-len",    type=int,   default=16)
-    p.add_argument("--stride",       type=int,   default=8)
-    p.add_argument("--d-model",      type=int,   default=128)
-    p.add_argument("--n-heads",      type=int,   default=8)
-    p.add_argument("--n-layers",     type=int,   default=6)
-    p.add_argument("--d-ff",         type=int,   default=256)
-    p.add_argument("--dropout",      type=float, default=0.2)
-    p.add_argument("--head-dropout", type=float, default=0.2)
-    p.add_argument("--class-weight-healthy", type=float, default=2.0)
-    p.add_argument("--class-weight-patient", type=float, default=1.0)
+    # 공통 인자는 protocol.py가 단일 출처다. evaluate.py·train.py와 같은
+    # 이름·같은 기본값을 써야 Early Exit 결과를 정적 모델과 나란히 놓을 수 있다.
+    add_common_args(p, include_model_args=True)
+
     p.add_argument("--loss-weight", default="uniform",
                    choices=["uniform", "deep", "shallow"],
                    help="출구 손실 가중: uniform(동일) / deep(깊은층↑) / shallow(얕은층↑)")
     p.add_argument("--out",  default=None,
                    help="기본값은 설정에 따라 자동 생성 (results/earlyexit_*.csv)")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    a = p.parse_args()
+    a = apply_config_file(p.parse_args())
     if a.out is None:                       # 설정별로 파일이 갈리게 (덮어쓰기 방지)
         tags = [f"L{a.n_layers}"]
         if a.loss_weight != "uniform":
@@ -289,7 +277,10 @@ def main():
     torch.manual_seed(args.seed)
     device = torch.device(args.device)
 
-    X, y, subject_id, _ = load_npz(args.data_path)
+    check_protocol(args)
+    X, y, subject_id, task = load_npz(args.data_path)
+    X, y, subject_id, task = filter_subjects(X, y, subject_id, task,
+                                             args.subjects_file)
     seq_len, n_ch, n_cls = X.shape[2], X.shape[1], int(y.max() + 1)
     print(f"데이터 {args.data_path}  X{X.shape}  "
           f"정상 {(y==0).sum()} / 환자 {(y==1).sum()}  "
@@ -314,7 +305,7 @@ def main():
     criterion = nn.CrossEntropyLoss(weight=torch.tensor(
         [args.class_weight_healthy, args.class_weight_patient],
         dtype=torch.float32).to(device))
-    folds = subject_kfold(subject_id, y, n_splits=args.n_folds, seed=args.seed)
+    folds = get_folds(subject_id, y, args)
     thresholds = np.round(np.arange(0.50, 1.001, 0.025), 3)
     ckpt = f"results/_tmp_ee_{os.getpid()}.pt"   # 동시 실행 시 충돌 방지
 
