@@ -1,0 +1,9 @@
+# 완료 판정의 근거는 results/folds_*.csv 파일이다. 이 로그는 참고용.
+R5_s1_DONE 12:38
+R5_s7_DONE 13:00
+R5_s42_DONE 13:28
+R5_ALL_DONE 13:28
+R0_s42_DONE 14:10
+R0_s1_DONE 14:50
+R0_s7_DONE 15:39
+R0_ALL_DONE 15:39

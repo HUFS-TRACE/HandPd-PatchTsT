@@ -1,0 +1,60 @@
+[config] configs/protocol.yaml Àû¿ë: data_path=data/windows_2s.npz, val_size=0.1, stratified=False, epochs=50, patience=10, batch_size=64, lr=0.001, weight_decay=0.0001, label_smoothing=0.0, dropout=0.2, head_dropout=0.2, class_weight_healthy=2.0, class_weight_patient=1.0
+[protocol] data=windows_2s.npz subset=subset_R5.txt folds=3 val=0.1 strat=0 seed=42 cw=auto ls=0.0 ep=50 pat=10 bs=64 lr=0.001
+[subset] data/subset_R5.txt: ÇÇÇèÀÚ 61 ¡æ 41¸í, À©µµ¿ì 13474 ¡æ 10339°³
+         Á¤»ó 2409 / È¯ÀÚ 7930 À©µµ¿ì, ÇÇÇèÀÚ Á¤»ó 17 / È¯ÀÚ 24¸í
+         [ÁÖÀÇ] ¼­ºê¼ÂÀº Å¬·¡½º ºñÀ²ÀÌ ÀüÃ¼¿Í ´Ù¸£´Ù. --auto-class-weight ¸¦ ÁÖ ½ÇÇèÀ¸·Î »ï°í, °íÁ¤ °¡ÁßÀ¸·Îµµ ÇÑ ¹ø µ¹·Á °á·ĞÀÌ µÚÁıÈ÷Áö ¾Ê´ÂÁö È®ÀÎÇÒ °Í.
+µ¥ÀÌÅÍ data/windows_2s.npz  X(10339, 6, 2000)  Á¤»ó 2409 / È¯ÀÚ 7930  ÇÇÇèÀÚ 41¸í
+
+¼³Á¤            ÆĞÄ¡/stride  d_model   Ãş    MFLOPs       ÆÄ¶ó¹ÌÅÍ
+C:\Users\USER\Desktop\ÇĞ¼úÁ¦\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+d64L2         100/50          64   2      38.3     74,190
+
+1°³ ¼³Á¤ ¡¿ 3-fold ÇĞ½À ½ÃÀÛ (device=cpu). ¿À·¡ °É¸³´Ï´Ù.
+
+[1/1] d64L2  (38.3 MFLOPs)
+C:\Users\USER\Desktop\ÇĞ¼úÁ¦\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 1/3  À©µµ¿ì 0.772  ÇÇÇèÀÚ hard 0.786 / soft 0.786  AUC 0.848  ep 19(best 9)  gap +0.057
+C:\Users\USER\Desktop\ÇĞ¼úÁ¦\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 2/3  À©µµ¿ì 0.859  ÇÇÇèÀÚ hard 0.929 / soft 0.929  AUC 0.925  ep 14(best 4)  gap +1.328
+C:\Users\USER\Desktop\ÇĞ¼úÁ¦\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+[config] configs/protocol.yaml ì ìš©: data_path=data/windows_2s.npz, val_size=0.1, stratified=False, epochs=50, patience=10, batch_size=64, lr=0.001, weight_decay=0.0001, label_smoothing=0.0, dropout=0.2, head_dropout=0.2, class_weight_healthy=2.0, class_weight_patient=1.0
+[protocol] data=windows_2s.npz subset=subset_R5.txt folds=3 val=0.1 strat=0 seed=42 cw=auto ls=0.0 ep=50 pat=10 bs=64 lr=0.001
+[subset] data/subset_R5.txt: í”¼í—˜ì 61 â†’ 41ëª…, ìœˆë„ìš° 13474 â†’ 10339ê°œ
+         ì •ìƒ 2409 / í™˜ì 7930 ìœˆë„ìš°, í”¼í—˜ì ì •ìƒ 17 / í™˜ì 24ëª…
+         [ì£¼ì˜] ì„œë¸Œì…‹ì€ í´ë˜ìŠ¤ ë¹„ìœ¨ì´ ì „ì²´ì™€ ë‹¤ë¥´ë‹¤. --auto-class-weight ë¥¼ ì£¼ ì‹¤í—˜ìœ¼ë¡œ ì‚¼ê³ , ê³ ì • ê°€ì¤‘ìœ¼ë¡œë„ í•œ ë²ˆ ëŒë ¤ ê²°ë¡ ì´ ë’¤ì§‘íˆì§€ ì•ŠëŠ”ì§€ í™•ì¸í•  ê²ƒ.
+ë°ì´í„° data/windows_2s.npz  X(10339, 6, 2000)  ì •ìƒ 2409 / í™˜ì 7930  í”¼í—˜ì 41ëª…
+
+ì„¤ì •            íŒ¨ì¹˜/stride  d_model   ì¸µ    MFLOPs       íŒŒë¼ë¯¸í„°
+C:\Users\USER\Desktop\í•™ìˆ ì œ\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+d64L2         100/50          64   2      38.3     74,190
+
+1ê°œ ì„¤ì • Ã— 3-fold í•™ìŠµ ì‹œì‘ (device=cpu). ì˜¤ë˜ ê±¸ë¦½ë‹ˆë‹¤.
+
+[1/1] d64L2  (38.3 MFLOPs)
+C:\Users\USER\Desktop\í•™ìˆ ì œ\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+[config] configs/protocol.yaml ì ìš©: data_path=data/windows_2s.npz, val_size=0.1, stratified=False, epochs=50, patience=10, batch_size=64, lr=0.001, weight_decay=0.0001, label_smoothing=0.0, dropout=0.2, head_dropout=0.2, class_weight_healthy=2.0, class_weight_patient=1.0
+[protocol] data=windows_2s.npz subset=subset_R5.txt folds=3 val=0.1 strat=0 seed=1 cw=auto ls=0.0 ep=50 pat=10 bs=64 lr=0.001
+[config] configs/protocol.yaml ì ìš©: data_path=data/windows_2s.npz, val_size=0.1, stratified=False, epochs=50, patience=10, batch_size=64, lr=0.001, weight_decay=0.0001, label_smoothing=0.0, dropout=0.2, head_dropout=0.2, class_weight_healthy=2.0, class_weight_patient=1.0
+[protocol] data=windows_2s.npz subset=subset_R5.txt folds=3 val=0.1 strat=0 seed=7 cw=auto ls=0.0 ep=50 pat=10 bs=64 lr=0.001[subset] data/subset_R5.txt: ÇÇÇèÀÚ 61 ¡æ 41¸í, À©µµ¿ì 13474 ¡æ 10339°³
+         Á¤»ó 2409 / È¯ÀÚ 7930 À©µµ¿ì, ÇÇÇèÀÚ Á¤»ó 17 / È¯ÀÚ 24¸í
+         [ÁÖÀÇ] ¼­ºê¼ÂÀº Å¬·¡½º ºñÀ²ÀÌ ÀüÃ¼¿Í ´Ù¸£´Ù. --auto-class-weight ¸¦ ÁÖ ½ÇÇèÀ¸·Î »ï°í, °íÁ¤ °¡ÁßÀ¸·Îµµ ÇÑ ¹ø µ¹·Á °á·ĞÀÌ µÚÁıÈ÷Áö ¾Ê´ÂÁö È®ÀÎÇÒ °Í.
+µ¥ÀÌÅÍ data/windows_2s.npz  X(10339, 6, 2000)  Á¤»ó 2409 / È¯ÀÚ 7930  ÇÇÇèÀÚ 41¸í
+
+¼³Á¤            ÆĞÄ¡/stride  d_model   Ãş    MFLOPs       ÆÄ¶ó¹ÌÅÍ
+C:\Users\USER\Desktop\ÇĞ¼úÁ¦\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+d64L2         100/50          64   2      38.3     74,190
+
+1°³ ¼³Á¤ ¡¿ 3-fold ÇĞ½À ½ÃÀÛ (device=cpu). ¿À·¡ °É¸³´Ï´Ù.
+
+[1/1] d64L2  (38.3 MFLOPs)
+C:\Users\USER\Desktop\ÇĞ¼úÁ¦\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+ self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(

@@ -1,0 +1,4 @@
+name,fold,seed,n_layers,patch_len,stride,d_model,d_ff,window_acc,subject_acc,subject_acc_soft,roc_auc,n_test_windows,n_test_subjects,n_test_patient_windows,epochs,best_epoch,overfit_gap,class_weight,data,subset,n_folds,val_size,stratified,auto_class_weight,label_smoothing,epochs_max,patience,batch_size,lr
+d64L2,0,42,2,100,50,64,128,0.771864,0.785714,0.785714,0.848093,3476,14,2500,19,9,0.056772,2.411|0.6308,windows_2s.npz,subset_R5.txt,3,0.1,0,1,0.0,50,10,64,0.001
+d64L2,1,42,2,100,50,64,128,0.858702,0.928571,0.928571,0.925176,3482,14,2791,14,4,1.328452,2.1947|0.6475,windows_2s.npz,subset_R5.txt,3,0.1,0,1,0.0,50,10,64,0.001
+d64L2,2,42,2,100,50,64,128,0.680864,0.846154,0.846154,0.770503,3381,13,2639,45,35,0.018374,2.3503|0.6351,windows_2s.npz,subset_R5.txt,3,0.1,0,1,0.0,50,10,64,0.001

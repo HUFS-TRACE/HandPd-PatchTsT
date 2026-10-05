@@ -1,0 +1,38 @@
+# 고정 프로토콜 — 전원 동일. 변경은 팀 결정을 거친다.
+#
+#   python evaluate.py --config configs/protocol.yaml --suite depth
+#   python train.py    --config configs/protocol.yaml
+#
+# 명령줄에서 직접 준 인자가 이 파일보다 우선한다.
+# 조건을 바꿔 돌릴 때는 이 파일을 고치지 말고 명령줄로 덮어쓸 것.
+# (이 파일을 고치면 다른 사람 실험 조건까지 같이 바뀐다)
+
+data:
+  data_path: data/windows_2s.npz    # 창 길이 2초 고정. 1s/4s는 쓰지 않는다
+  # subjects_file: data/subset_R4.txt   # R4·R5 서브셋 실험에서만 켠다
+
+split:
+  n_folds: 5          # 전체 61명. 서브셋(R4·R5)은 3
+  val_size: 0.1
+  stratified: false   # GroupKFold. 스윕에서 층화가 더 나빴다 (t = -2.96)
+
+train:
+  epochs: 50
+  patience: 10
+  batch_size: 64
+  lr: 0.001
+  weight_decay: 0.0001
+  label_smoothing: 0.0
+  dropout: 0.2
+  head_dropout: 0.2
+
+class_weight:
+  class_weight_healthy: 2.0   # 전체 데이터 전용
+  class_weight_patient: 1.0
+  auto_class_weight: false    # 서브셋에서는 true가 주 실험
+
+# 시드는 42, 1, 7 세 개만 쓴다 — 전체·서브셋·경량 ML 구분 없이 동일하다.
+#   시드가 fold 분할을 바꾸지 않으므로(GroupKFold는 shuffle 안 함) 개수를 늘려도
+#   독립 단위는 fold 수 그대로다. 사람마다 다른 시드를 쓸 위험을 없애는 게 낫다.
+#   한 파일에 하나만 적을 수 없어 명령줄로 준다: --seed 42 / 1 / 7
+#   protocol.SEEDS 에 같은 값이 상수로 박혀 있고, 벗어나면 실행 시 경고가 뜬다.

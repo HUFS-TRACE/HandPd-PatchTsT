@@ -1,0 +1,55 @@
+[config] configs/protocol.yaml 적용: data_path=data/windows_2s.npz, n_folds=5, val_size=0.1, stratified=False, epochs=50, patience=10, batch_size=64, lr=0.001, weight_decay=0.0001, label_smoothing=0.0, dropout=0.2, head_dropout=0.2, class_weight_healthy=2.0, class_weight_patient=1.0, auto_class_weight=False
+[protocol] data=windows_2s.npz subset=- folds=5 val=0.1 strat=0 seed=7 cw=2.0/1.0 ls=0.0 ep=50 pat=10 bs=64 lr=0.001
+데이터 data/windows_2s.npz  X(13474, 6, 2000)  정상 4867 / 환자 8607  피험자 61명
+
+설정            패치/stride  d_model   층    MFLOPs       파라미터
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+d64L2         100/50          64   2      38.3     74,190
+
+1개 설정 × 5-fold 학습 시작 (device=cpu). 오래 걸립니다.
+
+[1/1] d64L2  (38.3 MFLOPs)
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    체크포인트 → results\ckpt_d64L2_f0_s7_size_d64L2_2s_s7.pt
+    fold 1/5  윈도우 0.763  피험자 hard 1.000 / soft 1.000  AUC 0.854  ep 14(best 4)  gap +3.528
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    체크포인트 → results\ckpt_d64L2_f1_s7_size_d64L2_2s_s7.pt
+    fold 2/5  윈도우 0.744  피험자 hard 0.750 / soft 0.750  AUC 0.816  ep 18(best 8)  gap +0.287
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    체크포인트 → results\ckpt_d64L2_f2_s7_size_d64L2_2s_s7.pt
+    fold 3/5  윈도우 0.582  피험자 hard 0.692 / soft 0.692  AUC 0.714  ep 11(best 1)  gap +0.070
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    체크포인트 → results\ckpt_d64L2_f3_s7_size_d64L2_2s_s7.pt
+    fold 4/5  윈도우 0.849  피험자 hard 0.833 / soft 0.833  AUC 0.878  ep 15(best 5)  gap +0.403
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    체크포인트 → results\ckpt_d64L2_f4_s7_size_d64L2_2s_s7.pt
+    fold 5/5  윈도우 0.821  피험자 hard 0.917 / soft 0.917  AUC 0.954  ep 15(best 5)  gap +0.181
+    fold 원본 수치 5행 → results\folds_size_d64L2_2s_s7.csv
+    윈도우 확률 13474개 → results\probs_d64L2_size_d64L2_2s_s7.npz
+    → 윈도우 0.752±0.093  피험자 hard 0.838 / soft 0.838  AUC 0.843  평균 14.6ep  과적합gap +0.894
+
+수치 저장: results\pareto_size_d64L2_2s_s7.csv
+
+설정            MFLOPs      윈도우    hard    soft     AUC    ep     gap  Pareto
+d64L2           38.3    0.752   0.839   0.839   0.843  14.6  +0.894  ★
+곡선 저장: results\pareto_size_d64L2_2s_s7.png
+학습 곡선 저장: results\loss_curves_size_d64L2_2s_s7.png
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py:460: UserWarning: Glyph 8722 (\N{MINUS SIGN}) missing from current font.
+  fig.tight_layout()
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py:461: UserWarning: Glyph 8722 (\N{MINUS SIGN}) missing from current font.
+  fig.savefig(out_png, dpi=140, facecolor="white")
+voting 비교 저장: results\voting_size_d64L2_2s_s7.png
+
+[voting] soft 우세 0개 / hard 우세 0개 / 동률 1개  |  평균 차이 +0.00%p
+Traceback (most recent call last):
+  File "C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py", line 706, in <module>
+    main()
+  File "C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py", line 692, in main
+    print(f"         피험자 {len(set(subject_id))}명 기준 1명 \u2248 "
+UnicodeEncodeError: 'cp949' codec can't encode character '\u2248' in position 23: illegal multibyte sequence

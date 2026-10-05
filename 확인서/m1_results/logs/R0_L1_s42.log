@@ -1,0 +1,37 @@
+device=cuda  seed=42
+  hw       X(13474, 6, 2000)  정상 4867 / 환자 8607  피험자 61명  (1인당 최소 82 / 중앙 163 / 최대 801)
+
+SharedPatchTST  d_model=64 · 1층 · 모달 1개
+  공유 인코더           33,472  (82.2%)
+  hw       전용          7,246   (채널 6 · 패치 100/50 → 토큰 39개)
+  합계                   40,718
+
+fold별 클래스 분포 [정상, 환자]
+  hw     fold 0  train [2584, 4738]  test [1639, 2841]
+  hw     fold 1  train [2712, 5344]  test [1743, 2732]
+  hw     fold 2  train [2928, 5085]  test [1485, 3034]
+
+3-fold 학습 시작 (pair-mode=longest, 최대 15 epoch)
+
+[fold 1/3]  15 epoch (best 10)
+    hw     윈도우 0.675   피험자 hard 0.750 / soft 0.750   AUC 0.755
+[fold 2/3]  15 epoch (best 11)
+    hw     윈도우 0.823   피험자 hard 0.900 / soft 0.900   AUC 0.898
+[fold 3/3]  7 epoch (best 2)
+    hw     윈도우 0.760   피험자 hard 0.905 / soft 0.905   AUC 0.850
+  확률 저장: probs_hw_run_R0_L1_s42.npz  (test 13474 / val 3557, val 중복 404)
+
+모달                윈도우acc          피험자 hard          피험자 soft             AUC
+hw         0.753 ± 0.060     0.852 ± 0.072     0.852 ± 0.072   0.834 ± 0.060
+
+수치 저장: results/run_R0_L1_s42.csv
+  ⚠️ 피험자가 가장 적은 모달이 61명 → 1명 ≈ 1.6%p. 단일 seed·개별 fold는 과대해석 금지.
+  ⚠️ 같은 설정(d64/L1)으로 돌린 단독 모델과만 비교할 것. 설정이 다르면 공유 효과와 설정 효과가 섞인다.
+/content/Shared-Parkinson/models/shared_patchtst.py:88: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+/content/Shared-Parkinson/models/shared_patchtst.py:88: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+/content/Shared-Parkinson/models/shared_patchtst.py:88: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+/content/Shared-Parkinson/models/shared_patchtst.py:88: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)

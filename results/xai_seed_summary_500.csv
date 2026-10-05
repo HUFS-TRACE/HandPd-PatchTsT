@@ -1,0 +1,3 @@
+config,win_ms,importance,group,channel,n_subjects,dz_s42,dz_s1,dz_s7,dz_seedavg,wilcoxon_p,subj_positive,sign_stable,n_seeds,p_holm,sig
+d64L2,500,abs,정상,ch2,35,1.046,0.82,0.72,1.023,0.0,32/35,True,3,0.0,*
+d64L2,500,abs,환자,ch2,26,1.961,1.535,1.532,1.807,0.0,26/26,True,3,0.0,*

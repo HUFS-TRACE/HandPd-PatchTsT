@@ -1,0 +1,2 @@
+modality,n_subjects,n_windows,d_model,n_layers,patch_len,stride,window_acc,subject_acc,subject_acc_soft,roc_auc,window_acc_std,subject_acc_std,subject_acc_soft_std,roc_auc_std,mean_epochs,params_shared,params_own,shared_ratio,pair_mode,seed
+hw,41,10339,64,1,100,50,0.7337,0.7802,0.7802,0.8135,0.0578,0.0078,0.0078,0.0716,11.3,33472,7246,0.822,longest,42

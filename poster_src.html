@@ -1,0 +1,243 @@
+<title>파킨슨 스크리닝 A1 포스터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* A1 세로 594 x 841 mm — 인쇄 전용, 단일 라이트 테마로 확정 */
+@page { size: 594mm 841mm; margin: 0; }
+
+:root{
+  --ink:#15242f; --ink2:#3d525f; --mute:#6b7f8c;
+  --navy:#1b4965; --navy-bg:#eaf1f6; --red:#b3121b; --green:#1f6f54;
+  --line:#c9d6de; --line2:#e4ecf1; --ground:#ffffff; --tint:#f4f8fa;
+  --serif:"Noto Serif KR",Georgia,serif;
+  --sans:"Noto Sans KR",-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:#8a97a0;font-family:var(--sans);color:var(--ink);
+  -webkit-font-smoothing:antialiased}
+
+.sheet{
+  width:594mm; height:841mm; background:var(--ground);
+  padding:16mm 16mm 12mm; margin:0 auto;
+  display:flex; flex-direction:column; gap:6.5mm;
+  position:relative; overflow:hidden;
+}
+@media screen{ .sheet{ margin:10mm auto; box-shadow:0 4mm 18mm rgba(0,0,0,.34);} }
+@media print{ body{background:#fff} .sheet{margin:0;box-shadow:none} }
+
+/* ── 표제 ── */
+header{border-bottom:2.4mm solid var(--navy);padding-bottom:5mm;flex:none}
+.eyebrow{font-family:var(--mono);font-size:14pt;letter-spacing:.10em;
+  color:var(--mute);margin-bottom:4mm}
+h1{font-family:var(--serif);font-weight:700;font-size:50pt;line-height:1.14;
+  letter-spacing:-.02em;color:var(--ink)}
+.sub{font-family:var(--serif);font-weight:600;font-size:25pt;color:var(--navy);
+  margin-top:3.5mm}
+.byline{font-size:14.5pt;color:var(--ink2);margin-top:4mm;
+  display:flex;justify-content:space-between;align-items:baseline;gap:8mm}
+.byline b{font-weight:700;color:var(--ink)}
+
+/* ── 큰 숫자 ── */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:3.5mm;flex:none}
+.stat{background:var(--tint);border:.4mm solid var(--line);
+  border-top:1.6mm solid var(--navy);padding:4mm 4mm 3.5mm;text-align:center}
+.stat b{display:block;font-family:var(--mono);font-weight:600;font-size:33pt;
+  color:var(--navy);line-height:1;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums}
+.stat span{display:block;font-size:12.5pt;color:var(--ink2);margin-top:2.6mm;
+  line-height:1.35}
+
+.lede{font-size:16pt;line-height:1.6;color:var(--ink2);flex:none;
+  border-left:1.4mm solid var(--line);padding-left:5mm}
+.lede b{color:var(--ink);font-weight:700}
+
+/* ── 근거 블록 ── */
+.block{flex:1 1 auto;display:flex;flex-direction:column;gap:2.6mm;min-height:0}
+.bh{display:flex;align-items:baseline;gap:4mm;border-bottom:.5mm solid var(--line);
+  padding-bottom:2.2mm;flex:none}
+.bn{font-family:var(--mono);font-weight:600;font-size:15pt;color:#fff;
+  background:var(--navy);padding:1.1mm 3.2mm;letter-spacing:.04em;flex:none}
+.bt{font-family:var(--serif);font-weight:700;font-size:26pt;color:var(--ink);
+  line-height:1.2}
+.bd{font-size:14.5pt;color:var(--mute);margin-left:auto;text-align:right;
+  line-height:1.35;flex:none;max-width:118mm}
+.fig{width:100%;height:auto;display:block;flex:1 1 auto;min-height:0;
+  object-fit:contain}
+.cap{font-size:13pt;line-height:1.5;color:var(--ink2);flex:none}
+.cap b{color:var(--navy)}
+
+.row{display:flex;gap:6mm;flex:1 1 auto;min-height:0}
+.row>.main{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:2.6mm}
+.card{width:150mm;flex:none;background:var(--navy-bg);border:.4mm solid #bed2df;
+  padding:5mm 5.5mm;display:flex;flex-direction:column;gap:3mm}
+.card h3{font-family:var(--serif);font-size:19pt;font-weight:700;color:var(--navy);
+  line-height:1.25}
+.card p{font-size:13.5pt;line-height:1.58;color:var(--ink2)}
+.card p b{color:var(--ink);font-weight:700}
+.crit{border-top:.4mm solid #bed2df;padding-top:3mm;font-size:12.5pt;
+  color:var(--navy);line-height:1.5}
+
+/* ── 하단 ── */
+.foot{display:flex;gap:6mm;flex:none}
+.foot>section{display:flex;flex-direction:column;gap:2.8mm}
+.foot .tbl{flex:1 1 0;min-width:0}
+.foot .end{width:150mm;flex:none}
+h4{font-family:var(--serif);font-size:18.5pt;font-weight:700;color:var(--ink)}
+table{border-collapse:collapse;width:100%;font-size:12.5pt;
+  font-variant-numeric:tabular-nums}
+th,td{padding:1.9mm 2.6mm;text-align:left;border-bottom:.3mm solid var(--line2);
+  line-height:1.32;vertical-align:top}
+th{font-size:11pt;font-weight:700;color:var(--mute);background:var(--tint);
+  border-bottom:.5mm solid var(--line);letter-spacing:.02em}
+td.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+tr.us td{background:var(--navy-bg);font-weight:700;color:var(--ink);
+  border-bottom:none}
+tr.us td.n{color:var(--navy)}
+.tnote{font-size:11.5pt;color:var(--mute);line-height:1.45}
+.end p{font-size:14pt;line-height:1.58;color:var(--ink2)}
+.end p b{color:var(--ink);font-weight:700}
+.limit{background:var(--tint);border-left:1.2mm solid var(--red);
+  padding:3.4mm 4mm;font-size:12pt;line-height:1.5;color:var(--ink2)}
+.limit b{color:var(--red);font-weight:700}
+.meta{font-family:var(--mono);font-size:11pt;color:var(--mute);
+  border-top:.4mm solid var(--line);padding-top:3mm;letter-spacing:.03em;
+  display:flex;justify-content:space-between;gap:6mm;flex:none}
+</style>
+
+<div class="sheet">
+
+  <header>
+    <p class="eyebrow">NEWHANDPD 스마트펜 6채널 · 1000Hz · 고유 인물 61명 (정상 35 / 환자 26)</p>
+    <h1>파킨슨 필기 스크리닝에<br>무거운 모델은 필요 없다</h1>
+    <p class="sub">계산을 입력별로 배분하지 말고, 표현을 바꿔라</p>
+    <p class="byline">
+      <span><b>이우림</b> · 임시연 · 원종윤 · 박민규</span>
+      <span>PatchTST + RevIN · 인물 단위 GroupKFold · 시드 42 / 1 / 7</span>
+    </p>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><b>38</b><span>MFLOPs<br>배포 모델 <code>d64L2</code></span></div>
+    <div class="stat"><b>7.8</b><span>ms · 노트북 CPU<br>코어 1개, batch=1</span></div>
+    <div class="stat"><b>91×</b><span>연산량 절감<br>참조 모델 대비</span></div>
+    <div class="stat"><b>.851</b><span>창 ROC-AUC<br>손실 0.012</span></div>
+    <div class="stat"><b>256×</b><span>실시간 대비<br>2초 신호 처리</span></div>
+  </div>
+
+  <p class="lede">
+    3,499 MFLOPs 참조 모델과 38 MFLOPs 모델의 창 AUC 차이는 <b>0.012</b> — 동등성 마진
+    0.02 안이다. <b>다만 이 데이터셋은 나이 하나로 자르는 규칙만으로 73.8%가 맞는다.</b>
+    성능을 주장하기 전에 그 성능이 무엇인지부터 물어야 한다.
+  </p>
+
+  <section class="block">
+    <div class="bh">
+      <span class="bn">근거 1</span>
+      <span class="bt">성능은 교란에서 오지 않았다</span>
+      <span class="bd">연령 · 측정 연도 · 기록 경계<br>세 지름길을 각각 끊고 재학습</span>
+    </div>
+    <img class="fig" src="results/poster_fig1_gates.png" alt="세 관문">
+    <p class="cap">
+      <b>연령을 대리 학습했다면 반대 방향이 나와야 한다.</b> 배포 모델
+      <code>d64L2</code>에서도 재현된다(우위 +.081 → <b>+.178</b>, 연령 매칭 시 정확도가
+      오히려 상승). 기록의 첫 창·마지막 창을 지워도 창 AUC .8664 → .8691로 유지된다.
+    </p>
+  </section>
+
+  <div class="row">
+    <div class="main">
+      <div class="bh">
+        <span class="bn">근거 2</span>
+        <span class="bt">계산을 늘려도 나아지지 않는다</span>
+      </div>
+      <img class="fig" src="results/poster_fig2_cost.png" alt="연산량 대 성능">
+      <p class="cap">
+        층을 6배 쌓아도 AUC는 개선되지 않는다(L1 .8664 → L6 .8629). 유효한 축은
+        <b>깊이가 아니라 패치 길이와 폭</b>이다.
+      </p>
+    </div>
+    <aside class="card">
+      <h3>그러면 왜 Early Exit이<br>답이 아닌가</h3>
+      <p>
+        동적 배분은 <b>"입력마다 필요한 계산량이 다르다"</b>를 전제한다. 이를 검증 가능한
+        조건으로 형식화해 깊이 · 사람 · 시간 세 방향에서 측정했다.
+      </p>
+      <p>
+        <b>전제는 성립한다.</b> 애매한 피험자 18%, 절감의 이론적 여지 98.5%, 멈출 신호도
+        있다(r = +0.34).
+      </p>
+      <p>
+        <b>그런데도 작동하지 않는다.</b> 층을 6배 쌓아도 어려운 사람은 구제되지 않고,
+        증거를 더 모으면 <b>더 빨리 확신 있게 틀린다</b>(확신 오분류 8명 중 7명이 환자).
+        τ = 0.50에서 평균 종료 출구가 1.00 — 라우팅 자체가 관측되지 않는다.
+      </p>
+      <p class="crit">
+        원인은 난이도 분산의 부재가 아니라 <b>난이도와 계산량 요구가 서로 다른 것</b>이다.
+        <b>그래서 입력별 배분이 아니라 표현을 바꿨다.</b>
+      </p>
+    </aside>
+  </div>
+
+  <section class="block">
+    <div class="bh">
+      <span class="bn">근거 3</span>
+      <span class="bt">그럼에도 모델은 떨림을 본다</span>
+      <span class="bd">고정 모델 · 1초 구간 마스킹 · 상대 파워<br>순열 1,000회 · Holm 보정</span>
+    </div>
+    <img class="fig" src="results/poster_fig3_evidence.png" alt="설명 분석">
+    <p class="cap">
+      모델이 짚는 구간과 나머지 구간의 <b>4–6Hz 떨림 대역 상대 파워</b>를 피험자 안에서
+      비교했다. 12개 검정에서 <b>환자의 축압력 하나만</b> 세 시드 전부 생존(26명 중
+      22명 동일 방향). 과제 순서는 독립적으로 얻은 과제별 분류 성능(원 그리기 AUC
+      .408)과 방향이 일치한다.
+    </p>
+  </section>
+
+  <div class="foot">
+    <section class="tbl">
+      <h4>선행 연구는 왜 90%대인가 — 분할 프로토콜의 문제</h4>
+      <table>
+        <thead><tr><th>연구</th><th>분할 단위</th><th class="n">보고 성능</th></tr></thead>
+        <tbody>
+          <tr><td>이미지 5-fold 계열 (2025)</td><td>클래스별 샘플 5-fold, 그룹 키 미확인</td><td class="n">96.97 ± 1.27%</td></tr>
+          <tr><td>1D-CNN + BiGRU (2020)</td><td>65/10/25, 그룹 키 미확인</td><td class="n">94.44%</td></tr>
+          <tr><td>Albani · Sonbol (2026)</td><td>이미지 단위 5-fold와 LOIO 직접 비교</td><td class="n">97.08 · 94.91%</td></tr>
+          <tr><td>Zhang (2025) — 재현 연구</td><td>원 논문 프로토콜 재현</td><td class="n">84.03 ± 2.67%</td></tr>
+          <tr><td>Zhu (2025)</td><td>NewHandPD를 외부 평가로만 사용</td><td class="n">76.89%</td></tr>
+          <tr class="us"><td>본 연구</td><td>인물 단위 GroupKFold + 연령 매칭</td><td class="n">창 AUC .851–.866</td></tr>
+        </tbody>
+      </table>
+      <p class="tnote">
+        그룹 키 미확인 연구는 96~99%대, 재현 · 외부 평가 · 사람 단위 명시 연구는
+        76~84%대에 모인다. <b>미확인은 미수행 판정이 아니다</b> — 논문에 기술되지 않아
+        확인하지 못했다는 뜻이다.
+      </p>
+    </section>
+
+    <section class="end">
+      <h4>결론</h4>
+      <p>
+        <b>38 MFLOPs 모델이 노트북 CPU 코어 하나에서 2초 신호를 7.8ms에 처리한다.</b>
+        별도 가속기 없이 온디바이스 선별이 가능한 수준이다.
+      </p>
+      <p>
+        그 절감은 <b>입력별 배분이 아니라 표현을 바꿔서</b> 얻었다. 다만 FLOPs 91배
+        차이가 실측에서는 <b>49배</b>로 줄어, 이론 연산량만으로 배포 비용을 주장할 수
+        없음도 함께 보인다.
+      </p>
+      <p class="limit">
+        <b>말할 수 없는 것</b> — 서브셋 실험은 fold 3개라 ±0.15 규모 변화를 검출하지
+        못한다. occlusion은 상관이며 인과가 아니다(같은 대역을 지우고 재학습하면 성능이
+        회복된다). 개별 항목의 최초성은 주장하지 않는다.
+      </p>
+    </section>
+  </div>
+
+  <p class="meta">
+    <span>본선 계획 — 실제 기기 프로토타입 실증</span>
+    <span>근거 파일 results/ · 전체 논문 paper/award.md · 2026-09-09</span>
+  </p>
+
+</div>

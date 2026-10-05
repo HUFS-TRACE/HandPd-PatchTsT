@@ -1,0 +1,141 @@
+[config] configs/protocol.yaml 적용: data_path=data/windows_2s.npz, val_size=0.1, stratified=False, epochs=50, patience=10, batch_size=64, lr=0.001, weight_decay=0.0001, label_smoothing=0.0, dropout=0.2, head_dropout=0.2, class_weight_healthy=2.0, class_weight_patient=1.0
+[protocol] data=windows_2s.npz subset=subset_R4.txt folds=3 val=0.1 strat=0 seed=42 cw=auto ls=0.0 ep=50 pat=10 bs=64 lr=0.001
+[subset] data/subset_R4.txt: 피험자 61 → 40명, 윈도우 13474 → 10633개
+         정상 2026 / 환자 8607 윈도우, 피험자 정상 14 / 환자 26명
+         [주의] 서브셋은 클래스 비율이 전체와 다르다. --auto-class-weight 를 주 실험으로 삼고, 고정 가중으로도 한 번 돌려 결론이 뒤집히지 않는지 확인할 것.
+데이터 data/windows_2s.npz  X(10633, 6, 2000)  정상 2026 / 환자 8607  피험자 40명
+
+설정            패치/stride  d_model   층    MFLOPs       파라미터
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+d64L2         100/50          64   2      38.3     74,190
+
+1개 설정 × 3-fold 학습 시작 (device=cpu). 오래 걸립니다.
+
+[1/1] d64L2  (38.3 MFLOPs)
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 1/3  윈도우 0.726  피험자 hard 0.846 / soft 0.846  AUC 0.782  ep 11(best 1)  gap +7.039
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 2/3  윈도우 0.822  피험자 hard 0.923 / soft 0.923  AUC 0.886  ep 13(best 3)  gap +1.959
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 3/3  윈도우 0.789  피험자 hard 0.786 / soft 0.786  AUC 0.876  ep 11(best 1)  gap +0.572
+    fold 원본 수치 3행 → results\folds_size_d64L2_2s_R4_fold3_autocw.csv
+    윈도우 확률 10633개 → results\probs_d64L2_size_d64L2_2s_R4_fold3_autocw.npz
+    → 윈도우 0.779±0.040  피험자 hard 0.852 / soft 0.852  AUC 0.848  평균 11.7ep  과적합gap +3.190
+
+수치 저장: results\pareto_size_d64L2_2s_R4_fold3_autocw.csv
+
+설정            MFLOPs      윈도우    hard    soft     AUC    ep     gap  Pareto
+d64L2           38.3    0.779   0.852   0.852   0.848  11.7  +3.190  ★
+곡선 저장: results\pareto_size_d64L2_2s_R4_fold3_autocw.png
+학습 곡선 저장: results\loss_curves_size_d64L2_2s_R4_fold3_autocw.png
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py:484: UserWarning: Glyph 8722 (\N{MINUS SIGN}) missing from current font.
+  fig.tight_layout()
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py:485: UserWarning: Glyph 8722 (\N{MINUS SIGN}) missing from current font.
+  fig.savefig(out_png, dpi=140, facecolor="white")
+voting 비교 저장: results\voting_size_d64L2_2s_R4_fold3_autocw.png
+
+[voting] soft 우세 0개 / hard 우세 0개 / 동률 1개  |  평균 차이 +0.00%p
+Traceback (most recent call last):
+  File "C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py", line 731, in <module>
+    main()
+  File "C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py", line 717, in main
+    print(f"         피험자 {len(set(subject_id))}명 기준 1명 \u2248 "
+UnicodeEncodeError: 'cp949' codec can't encode character '\u2248' in position 23: illegal multibyte sequence
+[config] configs/protocol.yaml 적용: data_path=data/windows_2s.npz, val_size=0.1, stratified=False, epochs=50, patience=10, batch_size=64, lr=0.001, weight_decay=0.0001, label_smoothing=0.0, dropout=0.2, head_dropout=0.2, class_weight_healthy=2.0, class_weight_patient=1.0
+[protocol] data=windows_2s.npz subset=subset_R4.txt folds=3 val=0.1 strat=0 seed=1 cw=auto ls=0.0 ep=50 pat=10 bs=64 lr=0.001
+[subset] data/subset_R4.txt: 피험자 61 → 40명, 윈도우 13474 → 10633개
+         정상 2026 / 환자 8607 윈도우, 피험자 정상 14 / 환자 26명
+         [주의] 서브셋은 클래스 비율이 전체와 다르다. --auto-class-weight 를 주 실험으로 삼고, 고정 가중으로도 한 번 돌려 결론이 뒤집히지 않는지 확인할 것.
+데이터 data/windows_2s.npz  X(10633, 6, 2000)  정상 2026 / 환자 8607  피험자 40명
+
+설정            패치/stride  d_model   층    MFLOPs       파라미터
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+d64L2         100/50          64   2      38.3     74,190
+
+1개 설정 × 3-fold 학습 시작 (device=cpu). 오래 걸립니다.
+
+[1/1] d64L2  (38.3 MFLOPs)
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 1/3  윈도우 0.801  피험자 hard 0.769 / soft 0.769  AUC 0.794  ep 11(best 1)  gap +0.240
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 2/3  윈도우 0.804  피험자 hard 0.769 / soft 0.769  AUC 0.861  ep 16(best 6)  gap +0.398
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 3/3  윈도우 0.856  피험자 hard 0.929 / soft 0.929  AUC 0.889  ep 17(best 7)  gap +0.543
+    fold 원본 수치 3행 → results\folds_size_d64L2_2s_R4_fold3_autocw_s1.csv
+    윈도우 확률 10633개 → results\probs_d64L2_size_d64L2_2s_R4_fold3_autocw_s1.npz
+    → 윈도우 0.820±0.025  피험자 hard 0.822 / soft 0.822  AUC 0.848  평균 14.7ep  과적합gap +0.394
+
+수치 저장: results\pareto_size_d64L2_2s_R4_fold3_autocw_s1.csv
+
+설정            MFLOPs      윈도우    hard    soft     AUC    ep     gap  Pareto
+d64L2           38.3    0.820   0.822   0.822   0.848  14.7  +0.394  ★
+곡선 저장: results\pareto_size_d64L2_2s_R4_fold3_autocw_s1.png
+학습 곡선 저장: results\loss_curves_size_d64L2_2s_R4_fold3_autocw_s1.png
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py:484: UserWarning: Glyph 8722 (\N{MINUS SIGN}) missing from current font.
+  fig.tight_layout()
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py:485: UserWarning: Glyph 8722 (\N{MINUS SIGN}) missing from current font.
+  fig.savefig(out_png, dpi=140, facecolor="white")
+voting 비교 저장: results\voting_size_d64L2_2s_R4_fold3_autocw_s1.png
+
+[voting] soft 우세 0개 / hard 우세 0개 / 동률 1개  |  평균 차이 +0.00%p
+Traceback (most recent call last):
+  File "C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py", line 731, in <module>
+    main()
+  File "C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py", line 717, in main
+    print(f"         피험자 {len(set(subject_id))}명 기준 1명 \u2248 "
+UnicodeEncodeError: 'cp949' codec can't encode character '\u2248' in position 23: illegal multibyte sequence
+[config] configs/protocol.yaml 적용: data_path=data/windows_2s.npz, val_size=0.1, stratified=False, epochs=50, patience=10, batch_size=64, lr=0.001, weight_decay=0.0001, label_smoothing=0.0, dropout=0.2, head_dropout=0.2, class_weight_healthy=2.0, class_weight_patient=1.0
+[protocol] data=windows_2s.npz subset=subset_R4.txt folds=3 val=0.1 strat=0 seed=7 cw=auto ls=0.0 ep=50 pat=10 bs=64 lr=0.001
+[subset] data/subset_R4.txt: 피험자 61 → 40명, 윈도우 13474 → 10633개
+         정상 2026 / 환자 8607 윈도우, 피험자 정상 14 / 환자 26명
+         [주의] 서브셋은 클래스 비율이 전체와 다르다. --auto-class-weight 를 주 실험으로 삼고, 고정 가중으로도 한 번 돌려 결론이 뒤집히지 않는지 확인할 것.
+데이터 data/windows_2s.npz  X(10633, 6, 2000)  정상 2026 / 환자 8607  피험자 40명
+
+설정            패치/stride  d_model   층    MFLOPs       파라미터
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+d64L2         100/50          64   2      38.3     74,190
+
+1개 설정 × 3-fold 학습 시작 (device=cpu). 오래 걸립니다.
+
+[1/1] d64L2  (38.3 MFLOPs)
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 1/3  윈도우 0.729  피험자 hard 0.923 / soft 0.846  AUC 0.778  ep 11(best 1)  gap +0.738
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 2/3  윈도우 0.782  피험자 hard 0.769 / soft 0.769  AUC 0.848  ep 11(best 1)  gap +1.434
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\model.py:101: UserWarning: enable_nested_tensor is True, but self.use_nested_tensor is False because encoder_layer.norm_first was True
+  self.encoder = nn.TransformerEncoder(
+    fold 3/3  윈도우 0.795  피험자 hard 0.786 / soft 0.786  AUC 0.945  ep 13(best 3)  gap +0.155
+    fold 원본 수치 3행 → results\folds_size_d64L2_2s_R4_fold3_autocw_s7.csv
+    윈도우 확률 10633개 → results\probs_d64L2_size_d64L2_2s_R4_fold3_autocw_s7.npz
+    → 윈도우 0.769±0.029  피험자 hard 0.826 / soft 0.800  AUC 0.857  평균 11.7ep  과적합gap +0.775
+
+수치 저장: results\pareto_size_d64L2_2s_R4_fold3_autocw_s7.csv
+
+설정            MFLOPs      윈도우    hard    soft     AUC    ep     gap  Pareto
+d64L2           38.3    0.769   0.826   0.800   0.857  11.7  +0.775  ★
+곡선 저장: results\pareto_size_d64L2_2s_R4_fold3_autocw_s7.png
+학습 곡선 저장: results\loss_curves_size_d64L2_2s_R4_fold3_autocw_s7.png
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py:484: UserWarning: Glyph 8722 (\N{MINUS SIGN}) missing from current font.
+  fig.tight_layout()
+C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py:485: UserWarning: Glyph 8722 (\N{MINUS SIGN}) missing from current font.
+  fig.savefig(out_png, dpi=140, facecolor="white")
+voting 비교 저장: results\voting_size_d64L2_2s_R4_fold3_autocw_s7.png
+
+[voting] soft 우세 0개 / hard 우세 1개 / 동률 0개  |  평균 차이 -2.56%p
+Traceback (most recent call last):
+  File "C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py", line 731, in <module>
+    main()
+  File "C:\Users\USER\Desktop\학술제\patchtst_pd\HandPd-PatchTsT\evaluate.py", line 717, in main
+    print(f"         피험자 {len(set(subject_id))}명 기준 1명 \u2248 "
+UnicodeEncodeError: 'cp949' codec can't encode character '\u2248' in position 23: illegal multibyte sequence

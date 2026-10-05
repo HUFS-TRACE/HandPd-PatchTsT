@@ -1,0 +1,2 @@
+config,n_folds,patch,d_model,n_layers,window_acc,roc_auc,subject_acc_hard,subject_acc_soft,fold_acc_min,fold_acc_max,fold_acc_std
+d64L2,5,100/50,64,2,0.7793,0.855,0.8525,0.8525,0.6702,0.8615,0.0695

@@ -1,0 +1,5 @@
+config,seed,band,removed,roc_auc,delta_auc,window_acc,dp_patient,dp_healthy
+d64L2,7,4-6Hz,none,0.8331,0.0,0.7509,0.0,0.0
+d64L2,7,4-6Hz,all,0.8279,-0.0052,0.7404,0.0261,-0.0137
+d64L2,7,4-6Hz,pen,0.8263,-0.0067,0.7353,0.0313,-0.016
+d64L2,7,4-6Hz,mic,0.833,-0.0,0.7508,0.0,0.0

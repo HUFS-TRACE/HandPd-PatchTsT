@@ -1,0 +1,15 @@
+win_ms,mask,group,channel,n_windows,mean_drop,max_drop,usable_for_x2
+1000,interp,정상,ch0,4867,0.13037,0.19539,True
+1000,interp,정상,ch1,4867,-0.06608,-0.013,True
+1000,interp,정상,ch2,4867,-0.06668,0.00193,True
+1000,interp,정상,ch3,4867,-0.00781,0.06326,True
+1000,interp,정상,ch4,4867,-0.00628,0.02471,True
+1000,interp,정상,ch5,4867,-0.00326,0.03933,True
+1000,interp,정상,전채널,4867,-0.05251,0.10709,True
+1000,interp,환자,ch0,8607,-0.09532,-0.05039,True
+1000,interp,환자,ch1,8607,0.1107,0.17593,True
+1000,interp,환자,ch2,8607,0.13624,0.23371,True
+1000,interp,환자,ch3,8607,0.06025,0.14337,True
+1000,interp,환자,ch4,8607,0.01331,0.04715,True
+1000,interp,환자,ch5,8607,0.01481,0.06218,True
+1000,interp,환자,전채널,8607,0.25442,0.45361,True
